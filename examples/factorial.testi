@@ -1,0 +1,18 @@
+fun fac(n)
+    if n == 0 then
+        return 1
+    end
+    fac(n-1) * n
+end
+
+fun iter_fac(n)
+    let acc = 1
+    for i in 2..n+1 then
+        acc *= i
+    end
+    acc
+end
+
+let user_input = Integer(input())
+print(fac(user_input))
+print(iter_fac(user_input))

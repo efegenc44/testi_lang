@@ -1,0 +1,30 @@
+fun fib(n)
+    if n <= 2 then
+        return 1
+    end
+    fib(n-1) + fib(n-2)
+end
+
+fun memoized_fib(n)
+    let cache = #[]
+    
+    fun fib(n)
+        if contains_key(cache, n) then
+            return cache[n]
+        end
+
+        if n <= 2 then
+            return 1
+        end
+        
+        let res = fib(n-1) + fib(n-2)
+        cache += [n, res] 
+        res
+    end
+
+    fib(n)
+end
+
+let user_input = Integer(input())
+print(fib(user_input))
+print(memoized_fib(user_input))

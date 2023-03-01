@@ -1,0 +1,17 @@
+let user_input = Integer(input())
+
+fun divides(q, p)
+    p mod q == 0
+end
+
+for i in 0..user_input+1 then
+    if divides(15, i) then
+        print("FizzBuzz")
+    ef divides(5, i)  then
+        print("Buzz")
+    ef divides(3, i)  then
+        print("Fizz")
+    else
+        print(i)
+    end
+end
