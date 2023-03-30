@@ -17,6 +17,12 @@ pub enum Stmt {
         args: Vec<String>,
         body: Vec<Spanned<Stmt>>
     },
+    ClosureStmt {
+        name: String,
+        args: Vec<String>,
+        body: Vec<Spanned<Stmt>>,
+        closure: Vec<String>
+    },
     IfStmt {
         branches: Vec<(
             Spanned<Expr>,     // Condition 

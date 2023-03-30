@@ -163,6 +163,16 @@ impl Engine {
             //   Ignore Function Definitions at `run` because we
             // already defined them at `collect_definitions`
             FunStmt {..}  => (),
+            ClosureStmt { name, args, body, closure } => {
+                let mut closure_map = HashMap::new();
+                for var in closure {
+                    closure_map.insert(var.to_string(), self.resolve(var).unwrap());
+                }
+                
+                self.define(name.to_string(), ClosureVal {
+                    args: args.to_vec(), body: body.to_vec(), closure: closure_map
+                });
+            },
             IfStmt { branches, elss } => {
                 for (cond, branch) in branches {
                     let cond_val = self.eval(cond)?;

@@ -74,6 +74,11 @@ pub enum Value {
         args: Vec<String>,
         body: Vec<Spanned<Stmt>>,
     },
+    ClosureVal {
+        args: Vec<String>,
+        body: Vec<Spanned<Stmt>>,
+        closure: HashMap<String, Value>
+    },
     BuiltInFunVal {
         arity: usize,
         fun: fn(vals: Vec<Value>, engine: &mut Engine) -> Result<Value, (String, Option<Error>)>
@@ -137,6 +142,7 @@ impl std::fmt::Display for Value {
             },
             RangeVal(bot, up)  => write!(f, "{bot}..{up}"),
             FunVal {..}        => write!(f, "<function>"),
+            ClosureVal {..}    => write!(f, "<function>"),
             BuiltInFunVal {..} => write!(f, "<built-in function>"),
             NothingVal         => write!(f, "nothing"),
             TypeVal(ty)        => write!(f, "{ty}"),
@@ -161,6 +167,7 @@ impl Value {
             MapVal(_)          => MapTy,
             RangeVal(_, _)     => RangeTy,
             FunVal {..}        => FunTy,
+            ClosureVal {..}    => FunTy,
             BuiltInFunVal {..} => FunTy,
             NothingVal         => NothingTy,
             TypeVal(_)         => TyTy,
@@ -398,18 +405,24 @@ impl Value {
     pub fn index(&self, index: Value) -> ExprResult {
         match self {
             StringVal(s)  => {
-                let IntegerVal(index) = index else {
+                let IntegerVal(mut index) = index else {
                     return Err(format!("Index must be an `Integer` not `{ty}`.", ty = index.ty()))
                 };
+                if index < 0 {
+                    index = s.len() as i32 + index;
+                }
                 match s.chars().nth(index as usize) {
                     Some(res) => Ok(StringVal(String::from(res))),
                     None => Err("Index out of bounds".to_string())
                 }
             },
             ListVal(list) => {
-                let IntegerVal(index) = index else {
+                let IntegerVal(mut index) = index else {
                     return Err(format!("Index must be an `Integer` not `{ty}`.", ty = index.ty()))
                 };
+                if index < 0 {
+                    index = list.len() as i32 + index;
+                }
                 match list.get(index as usize) {
                     Some(res) => Ok(res.clone()),
                     None => Err("Index out of bounds.".to_string())
