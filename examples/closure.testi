@@ -1,0 +1,9 @@
+fun add_function(f, b)
+    \(f, b) x.
+        f(x) + b(x)
+    end
+end
+
+let f = add_function(\x. x+2 end, \x. x*2 end);
+let user_input = Integer(input())
+print(f(user_input))

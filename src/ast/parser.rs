@@ -170,6 +170,28 @@ impl Parser {
                 let rcurly_span = self.span();
                 self.consume(&RSQUARE)?;
                 Spanned::new(MapExpr(pairs), cs.extend(rcurly_span))
+            },
+            BACKSLASH => {
+                let closure = if self.peek() == LPAREN {
+                    Some(self.args()?)
+                } else {
+                    None
+                };
+                let mut args = vec![];
+                if self.peek() != RPAREN {
+                    args.push(self.consume_symbol()?);
+                    while self.optional(&COMMA) {
+                        args.push(self.consume_symbol()?);
+                    }
+                }
+                self.consume(&DOT)?;
+                let mut body = vec![];
+                while self.peek() != KEND {
+                    body.push(self.statement()?)
+                }
+                let backslash_span = self.span();
+                self.advance();
+                Spanned::new(FunctionExpr { args, body, closure }, cs.extend(backslash_span))
             }
             _ => {
                 return simple_error(format!("Unexpected token `{ct}`."), cs)
@@ -365,6 +387,13 @@ impl Parser {
         let fun_span = self.span();
         // consume let and advance
         self.advance();
+        
+        let closure = if self.peek() == LPAREN {
+            Some(self.args()?)
+        } else {
+            None
+        };
+        
         let name = self.consume_symbol()?;
         let args = self.args()?;
         let mut body = vec![];
@@ -374,7 +403,11 @@ impl Parser {
         let end_span = self.span();
         self.consume(&KEND)?;
         self.in_fun -= 1;
-        Ok(Spanned::new(FunStmt { name, args, body }, fun_span.extend(end_span)))
+        
+        Ok(Spanned::new(match closure {
+            Some(closure) => ClosureStmt { name, args, body, closure },
+            None => FunStmt { name, args, body },
+        }, fun_span.extend(end_span)))
     }
 
     fn return_statement(&mut self) -> Res<Spanned<Stmt>> {

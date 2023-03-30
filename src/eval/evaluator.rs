@@ -287,6 +287,16 @@ impl Engine {
                     None      => simple_error(format!("`{type_name}` has no member called `{member}`"), from.span),
                 }
             },
+            FunctionExpr { args, body, closure } => Ok(if let Some(closure) = closure {
+                let mut closure_map = HashMap::new();
+                for var in closure {
+                    closure_map.insert(var.to_string(), self.resolve(var).unwrap());
+                }
+
+                ClosureVal { args: args.to_owned(), body: body.to_owned(), closure: closure_map }
+            } else {
+                FunVal { args: args.to_owned(), body: body.to_owned() }
+            }),
             ListExpr(exprs)  => {
                 let mut list = vec![]; 
                 for expr in exprs {

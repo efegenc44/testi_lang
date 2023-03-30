@@ -162,6 +162,7 @@ impl Lexer {
             ':'  => COLON,
             '#'  => HASH,
             ','  => COMMA,
+            '\\' => BACKSLASH,
             '.'  => if self.peek_is('.') {
                 TWODOT
             } else {

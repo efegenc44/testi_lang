@@ -3,6 +3,8 @@ use crate::{
     span::Spanned
 };
 
+use super::stmt::Stmt;
+
 #[derive(Clone, Copy, Debug)]
 pub enum BinaryOp {
     Add,
@@ -147,6 +149,11 @@ pub enum Expr {
     AccessExpr {
         from: Box<Spanned<Expr>>,
         member: String,
+    },
+    FunctionExpr {
+        args: Vec<String>,
+        body: Vec<Spanned<Stmt>>,
+        closure: Option<Vec<String>>
     },
     ListExpr(Vec<Spanned<Expr>>),
     MapExpr(Vec<(Spanned<Expr>, Spanned<Expr>)>),

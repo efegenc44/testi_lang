@@ -490,6 +490,46 @@ impl Value {
                 
                 Ok(rv)
             },
+            ClosureVal { args, body, closure } => {
+                if vals.len() != args.len() {
+                    return Err((format!("Expected {} arguments but {} given", args.len(), vals.len()), None))
+                }
+                
+                if body.is_empty() {
+                    return Ok(NothingVal)
+                }
+
+                engine.enter_scope();
+                for (arg, v) in closure {
+                    engine.define(arg.to_string(), v.to_owned());
+                }
+
+                handle(engine.collect_definition(body))?;
+                for (arg, v) in std::iter::zip(args, vals) {
+                    engine.define(arg.to_string(), v);
+                }
+                
+                for stmt in &body[..body.len() - 1] {
+                    let state = handle(engine.run(stmt))?;
+                    if let State::Return(val) = state {
+                        engine.exit_scope();
+                        return Ok(val)
+                    }
+                }
+                
+                // If the last statement is an expression return the value
+                let stmt = body.last().unwrap();
+                let rv = match &stmt.data {
+                    Stmt::ExprStmt(e) => handle(engine.eval(e))?,
+                    _ => match handle(engine.run(stmt))? {
+                        State::Return(val) => val,
+                        _ => NothingVal,
+                    }
+                };
+                engine.exit_scope();
+                
+                Ok(rv)
+            },
             BuiltInFunVal { arity, fun } => {
                 if vals.len() != *arity {
                     return Err((format!("Expected {} arguments but {} given.", arity, vals.len()), None))
