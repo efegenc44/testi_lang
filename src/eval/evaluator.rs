@@ -139,12 +139,29 @@ impl Engine {
 
     fn assign(&mut self, assignee: &Spanned<Expr>, val: Value) -> Res<Value> {
         match &assignee.data {
-            Variable(var) => self.redefine(&var, val.clone()),
-            _ => return simple_error("Invalid assignment target.", assignee.span)
-        }.map_err(|err| {
-            Error::new(err, assignee.span, None)
-        })?;
-        Ok(val)
+            Variable(var) => match self.redefine(&var, val.clone()) {
+                Ok(())   => Ok(val.clone()),
+                Err(err) => simple_error(err, assignee.span),
+            },
+            IndexExpr { from, index_expr } => {
+                self.eval(from)?.indexable().map_err(|err| {
+                    Error::new(err, from.span, None)
+                })?.replace(self.eval(index_expr)?, val).map_err(|err| {
+                   Error::new(err, index_expr.span, None)
+                })            
+            },
+            AccessExpr { from, member } => {
+                let from_val = self.eval(from)?;
+                let InstanceVal { type_name, mut members } = from_val else {
+                    return simple_error(format!("`{ty}` has no member.", ty = from_val.ty()), from.span)
+                };
+                match members.insert(member.clone(), val) {
+                    Some(_) => Ok(InstanceVal { type_name, members }),
+                    None    => simple_error(format!("`{type_name}` has no member called `{member}`"), from.span),
+                }
+            }
+            _ => simple_error("Invalid assignment target.", assignee.span)
+        }
     }
     
     pub fn run(&mut self, stmt: &Spanned<Stmt>) -> Res<State> {

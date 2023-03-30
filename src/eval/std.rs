@@ -7,15 +7,16 @@ use super::{
 
 pub fn get_global() -> HashMap<String, Value> {
     let global = HashMap::from([
-        ("Integer".to_string() , TypeVal(IntegerTy)),
-        ("Float".to_string()   , TypeVal(FloatTy)),
-        ("String".to_string()  , TypeVal(StringTy)),
-        ("Bool".to_string()    , TypeVal(BoolTy)),
-        ("Function".to_string(), TypeVal(FunTy)),
-        ("List".to_string()    , TypeVal(ListTy)),
-        ("Map".to_string()     , TypeVal(MapTy)),
-        ("Nothing".to_string() , TypeVal(NothingTy)),
-        ("Type".to_string()    , TypeVal(TyTy)),
+        ("Integer".to_string()  , TypeVal(IntegerTy)),
+        ("Float".to_string()    , TypeVal(FloatTy)),
+        ("String".to_string()   , TypeVal(StringTy)),
+        ("Character".to_string(), TypeVal(CharTy)),
+        ("Bool".to_string()     , TypeVal(BoolTy)),
+        ("Function".to_string() , TypeVal(FunTy)),
+        ("List".to_string()     , TypeVal(ListTy)),
+        ("Map".to_string()      , TypeVal(MapTy)),
+        ("Nothing".to_string()  , TypeVal(NothingTy)),
+        ("Type".to_string()     , TypeVal(TyTy)),
         ("print".to_string(), BuiltInFunVal {
             arity: 1, fun: |vals, _| {
                 println!("{}", vals[0]);

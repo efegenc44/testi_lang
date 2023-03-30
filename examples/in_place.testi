@@ -1,0 +1,31 @@
+// definition
+def Vector3
+    x y z
+end
+
+let v = Vector3(1, 2, 3)
+print(v)
+
+v = v.x = 3
+print(v)
+
+// list
+let list = [1, 2]
+print(list)
+
+list = list[0] = 4
+print(list)
+
+// map
+let map = #[1: 2, 2: 3]
+print(map)
+
+map = map[1] = "2"
+print(map)
+
+// string
+let s = "Hfllo"
+print(s)
+
+s = s[1] = Character("e")
+print(s)

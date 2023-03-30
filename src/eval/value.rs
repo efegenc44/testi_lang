@@ -62,6 +62,7 @@ pub enum Value {
     IntegerVal(i32),
     FloatVal(f32),
     StringVal(String),
+    CharVal(char),
     BoolVal(bool),
     ListVal(Vec<Value>),
     MapVal(HashMap<KeyValue, Value>),
@@ -93,6 +94,7 @@ impl std::fmt::Display for Value {
             IntegerVal(int)    => write!(f, "{int}"),
             FloatVal(float)    => write!(f, "{float}"),
             StringVal(s)       => write!(f, "\"{s}\""),
+            CharVal(ch)        => write!(f, "{ch}"),
             BoolVal(b)         => write!(f, "{b}"),
             ListVal(list)      => {
                 if list.len() == 0 {
@@ -162,6 +164,7 @@ impl Value {
             IntegerVal(_)      => IntegerTy,
             FloatVal(_)        => FloatTy,
             StringVal(_)       => StringTy,
+            CharVal(_)         => CharTy,
             BoolVal(_)         => BoolTy,
             ListVal(_)         => ListTy,
             MapVal(_)          => MapTy,
@@ -381,7 +384,7 @@ impl Value {
         match self {
             StringVal(s)  => {
                 let iter = s.chars().map(|ch| {
-                    StringVal(String::from(ch))
+                    CharVal(ch)
                 }).collect::<Vec<_>>().into_iter();
                 Ok(Box::new(iter))
             },
@@ -412,7 +415,7 @@ impl Value {
                     index = s.len() as i32 + index;
                 }
                 match s.chars().nth(index as usize) {
-                    Some(res) => Ok(StringVal(String::from(res))),
+                    Some(res) => Ok(CharVal(res)),
                     None => Err("Index out of bounds".to_string())
                 }
             },
@@ -435,6 +438,57 @@ impl Value {
                 };
                 match map.get(&key_value) {
                     Some(val) => Ok(val.clone()),
+                    None => return Err(format!("Absent Key {key_value}.")),
+                }
+            }
+            _ => unreachable!()
+        }
+    }
+
+    pub fn replace(&self, index: Value, val: Value) -> ExprResult {
+        match self {
+            StringVal(s)  => {
+                let IntegerVal(mut index) = index else {
+                    return Err(format!("Index must be an `Integer` not `{ty}`.", ty = index.ty()))
+                };
+                if index < 0 {
+                    index = s.len() as i32 + index;
+                }
+                let CharVal(v) = val else {
+                    return Err(format!("Value must be an `String` not `{ty}`.", ty = val.ty()))
+                };
+                if s.len() < index as usize {
+                    return Err("Index out of bounds".to_string())
+                }
+                let s = s.chars().enumerate().map(|(i, ch)| {
+                    if i == index as usize { v } else { ch }
+                }).collect();
+                Ok(StringVal(s))
+            },
+            ListVal(list) => {
+                let IntegerVal(mut index) = index else {
+                    return Err(format!("Index must be an `Integer` not `{ty}`.", ty = index.ty()))
+                };
+                if index < 0 {
+                    index = list.len() as i32 + index;
+                }
+                let mut list = list.clone();
+                match list.get_mut(index as usize) {
+                    Some(v) => {
+                        *v = val;
+                        Ok(ListVal(list))
+                    },
+                    None => Err("Index out of bounds.".to_string())
+                }
+            },
+            MapVal(map) => {
+                let key_value: KeyValue = match TryInto::try_into(index) {
+                    Ok(kv) => kv,
+                    Err(_) => return Err(format!("Invalid Key.").to_string()),
+                };
+                let mut map = map.clone();                
+                match map.insert(key_value.clone(), val) {
+                    Some(_) => Ok(MapVal(map)),
                     None => return Err(format!("Absent Key {key_value}.")),
                 }
             }
@@ -587,6 +641,18 @@ impl Value {
                             return Err((format!("Expected {} arguments but {} given.", 1, vals.len()), None))
                         }
                         Ok(StringVal(vals[0].to_string()))
+                    },
+                    CharTy => {
+                        if vals.len() != 1 {
+                            return Err((format!("Expected {} arguments but {} given.", 1, vals.len()), None))
+                        }
+                        let StringVal(s) = &vals[0] else {
+                            return Err((format!("Can't convert `{}` to `Character`", vals[0].ty()), None))
+                        };
+                        if s.len() != 1 {
+                            return Err((format!("`String` must contain 1 character for conversion to `Character`"), None))
+                        }
+                        Ok(CharVal(s.chars().nth(0).unwrap()))
                     },
                     BoolTy => {
                         if vals.len() != 1 {
