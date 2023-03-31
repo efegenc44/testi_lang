@@ -269,14 +269,16 @@ impl Parser {
 
     fn range(&mut self) -> Res<Spanned<Expr>> {
         let mut left = self.arith()?;
-        if let TWODOT = self.peek() {
+        if let TWODOT | TWODOTEQUAL = self.peek() {
+            let op = self.peek().into();
             self.advance();
             let right = self.arith()?;
             let span = left.span.extend(right.span);
-            left = Spanned::new(RangeExpr(
-                Box::new(left), 
-                Box::new(right)
-            ), span)
+            left = Spanned::new(BinaryExpr {
+                op,
+                left : Box::new(left), 
+                right: Box::new(right)
+            }, span)
         }
         Ok(left)
     }

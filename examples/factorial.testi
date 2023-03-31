@@ -7,7 +7,7 @@ end
 
 fun iter_fac(n)
     let acc = 1
-    for i in 2..n+1 then
+    for i in 2..=n then
         acc *= i
     end
     acc

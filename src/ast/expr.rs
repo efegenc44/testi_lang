@@ -20,7 +20,9 @@ pub enum BinaryOp {
     Le,
     And,
     Or,
-    Is
+    Is,
+    Xrn,
+    Irn
 }
 
 impl std::fmt::Display for BinaryOp {
@@ -40,6 +42,8 @@ impl std::fmt::Display for BinaryOp {
             BinaryOp::And => write!(f, "and"),
             BinaryOp::Or  => write!(f, "or"),
             BinaryOp::Is  => write!(f, "is"),
+            BinaryOp::Xrn => write!(f, ".."),
+            BinaryOp::Irn => write!(f, "..="),
         }
     }
 }
@@ -61,6 +65,8 @@ impl From<Token> for BinaryOp {
             Token::KAND         => Self::And,
             Token::KOR          => Self::Or,
             Token::KIS          => Self::Is,
+            Token::TWODOT       => Self::Xrn,
+            Token::TWODOTEQUAL  => Self::Irn,
             _ => unreachable!(),
         }
     }
@@ -160,7 +166,6 @@ pub enum Expr {
     },
     ListExpr(Vec<Spanned<Expr>>),
     MapExpr(Vec<(Spanned<Expr>, Spanned<Expr>)>),
-    RangeExpr(Box<Spanned<Expr>>, Box<Spanned<Expr>>),
     NaturalExpr(usize),
     FloatExpr(f32),
     StringExpr(String),

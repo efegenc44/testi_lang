@@ -52,6 +52,21 @@ impl BinaryOp {
                 };
                 Ok(BoolVal(&left.ty() == ty))                
             },
+            BinaryOp::Xrn |
+            BinaryOp::Irn => {
+                let IntegerVal(bot) = left else {
+                    return Err(format!("Range bounds expected to be `Integer` not `{ty}`.", ty = left.ty()))
+                };
+                let IntegerVal(up) = right else {
+                    return Err(format!("Range bounds expected to be `Integer` not `{ty}`.", ty = right.ty()))
+                };
+                
+                Ok(if let BinaryOp::Irn = self {
+                    RangeVal(*bot, *up+1)   
+                } else {
+                    RangeVal(*bot, *up)   
+                })
+            },
         }
     }
 }
@@ -336,17 +351,6 @@ impl Engine {
                     map.insert(key, self.eval(value)?);
                 } 
                 Ok(MapVal(map))
-            },
-            RangeExpr(bot, up) => {
-                let bot_val = self.eval(bot)?;
-                let IntegerVal(bot) = bot_val else {
-                    return simple_error(format!("Range bounds expected to be `Integer` not `{ty}`.", ty = bot_val.ty()), bot.span)
-                };
-                let up_val = self.eval(up)?;
-                let IntegerVal(up) = up_val else {
-                    return simple_error(format!("Range bounds expected to be `Integer` not `{ty}`.", ty = up_val.ty()), up.span)
-                };
-                Ok(RangeVal(bot, up))
             },
             NaturalExpr(nat) => Ok(IntegerVal(*nat as i32)),
             FloatExpr(float) => Ok(FloatVal(*float)),

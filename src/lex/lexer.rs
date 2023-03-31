@@ -165,7 +165,11 @@ impl Lexer {
             ','  => COMMA,
             '\\' => BACKSLASH,
             '.'  => if self.peek_is('.') {
-                TWODOT
+                if self.peek_is('=') {
+                    TWODOTEQUAL
+                } else {
+                    TWODOT
+                }
             } else {
                 DOT
             },
