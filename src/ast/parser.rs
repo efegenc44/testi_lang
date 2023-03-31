@@ -299,12 +299,28 @@ impl Parser {
         Ok(left)
     }
 
-    fn equality(&mut self) -> Res<Spanned<Expr>> {
+    fn type_test(&mut self) -> Res<Spanned<Expr>> {
         let mut left = self.comparison()?;
+        if let KIS = self.peek() {
+            let op = self.peek().into();
+            self.advance();
+            let right = self.comparison()?;
+            let span = left.span.extend(right.span);
+            left = Spanned::new(BinaryExpr { 
+                op, 
+                left : Box::new(left), 
+                right: Box::new(right) 
+            }, span)
+        }
+        Ok(left)
+    }
+
+    fn equality(&mut self) -> Res<Spanned<Expr>> {
+        let mut left = self.type_test()?;
         while let DEQUAL  | BANGEQUAL = self.peek() {
             let op = self.peek().into();
             self.advance();    
-            let right = self.comparison()?;
+            let right = self.type_test()?;
             let span = left.span.extend(right.span);
             left = Spanned::new(BinaryExpr { 
                 op, 

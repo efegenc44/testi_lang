@@ -19,7 +19,8 @@ pub enum BinaryOp {
     Lt,
     Le,
     And,
-    Or
+    Or,
+    Is
 }
 
 impl std::fmt::Display for BinaryOp {
@@ -38,6 +39,7 @@ impl std::fmt::Display for BinaryOp {
             BinaryOp::Le  => write!(f, "<="),
             BinaryOp::And => write!(f, "and"),
             BinaryOp::Or  => write!(f, "or"),
+            BinaryOp::Is  => write!(f, "is"),
         }
     }
 }
@@ -58,6 +60,7 @@ impl From<Token> for BinaryOp {
             Token::LESSEQUAL    => Self::Le,
             Token::KAND         => Self::And,
             Token::KOR          => Self::Or,
+            Token::KIS          => Self::Is,
             _ => unreachable!(),
         }
     }

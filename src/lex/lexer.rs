@@ -97,6 +97,7 @@ impl Lexer {
             "mod"      => KMOD,
             "and"      => KAND,
             "or"       => KOR,
+            "is"       => KIS,
             "let"      => KLET,
             "fun"      => KFUN,
             "def"      => KDEF,

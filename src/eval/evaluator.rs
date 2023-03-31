@@ -46,6 +46,12 @@ impl BinaryOp {
             }),
             BinaryOp::And => left & right,
             BinaryOp::Or  => left | right,
+            BinaryOp::Is => {
+                let TypeVal(ty) = right else {
+                    return Err(format!("Expected `Type` not {ty} at right side.", ty = right.ty()))
+                };
+                Ok(BoolVal(&left.ty() == ty))                
+            },
         }
     }
 }
