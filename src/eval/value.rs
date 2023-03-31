@@ -4,12 +4,12 @@ use Value::*;
 
 use crate::{
     ast::stmt::Stmt, 
-    span::Spanned, error::error::{Error, Res}
+    span::Spanned, error::error::{ Error, Res }
 };
 
 use super::{
     r#type::Type::{ self, * }, 
-    evaluator::{Engine, State}
+    evaluator::{ Engine, State }
 };
 
 #[derive(Clone, PartialEq, Hash, Eq)]
@@ -181,6 +181,41 @@ impl Value {
                     key.to_owned()
                 }).collect()
             },
+        }
+    }
+
+    pub fn as_integer(&self) -> Result<i32, String> {
+        match self {
+            IntegerVal(int) => Ok(*int),
+            _ => Err(format!("Expected {}, got {}.", IntegerTy, self.ty()))
+        }
+    }
+
+    pub fn as_char(&self) -> Result<char, String> {
+        match self {
+            CharVal(ch) => Ok(*ch),
+            _ => Err(format!("Expected {}, got {}.", CharTy, self.ty()))
+        }
+    }
+
+    pub fn as_bool(&self) -> Result<bool, String> {
+        match self {
+            BoolVal(b) => Ok(*b),
+            _ => Err(format!("Expected {}, got {}.", BoolTy, self.ty()))
+        }
+    }
+
+    pub fn as_type(&self) -> Result<Type, String> {
+        match self {
+            TypeVal(ty) => Ok(ty.clone()),
+            _ => Err(format!("Expected {}, got {}.", TyTy, self.ty()))
+        }
+    }
+
+    pub fn as_instance(&self) -> Result<(String, HashMap<String, Value>), String> {
+        match self {
+            InstanceVal { type_name, members } => Ok((type_name.clone(), members.clone())),
+            _ => Err(format!("Expected a `Definition`, got {}.", self.ty()))
         }
     }
 }
@@ -408,25 +443,27 @@ impl Value {
     pub fn index(&self, index: Value) -> ExprResult {
         match self {
             StringVal(s)  => {
-                let IntegerVal(mut index) = index else {
-                    return Err(format!("Index must be an `Integer` not `{ty}`.", ty = index.ty()))
-                };
-                if index < 0 {
-                    index = s.len() as i32 + index;
-                }
-                match s.chars().nth(index as usize) {
+                let index = index.as_integer()?;
+                let index = if index < 0 {
+                    s.len() as i32 + index
+                } else {
+                    index
+                } as usize;
+                
+                match s.chars().nth(index) {
                     Some(res) => Ok(CharVal(res)),
                     None => Err("Index out of bounds".to_string())
                 }
             },
             ListVal(list) => {
-                let IntegerVal(mut index) = index else {
-                    return Err(format!("Index must be an `Integer` not `{ty}`.", ty = index.ty()))
-                };
-                if index < 0 {
-                    index = list.len() as i32 + index;
-                }
-                match list.get(index as usize) {
+                let index = index.as_integer()?;
+                let index = if index < 0 {
+                    list.len() as i32 + index
+                } else {
+                    index
+                } as usize;
+                
+                match list.get(index) {
                     Some(res) => Ok(res.clone()),
                     None => Err("Index out of bounds.".to_string())
                 }
@@ -448,15 +485,13 @@ impl Value {
     pub fn replace(&self, index: Value, val: Value) -> ExprResult {
         match self {
             StringVal(s)  => {
-                let IntegerVal(mut index) = index else {
-                    return Err(format!("Index must be an `Integer` not `{ty}`.", ty = index.ty()))
+                let index = index.as_integer()?;
+                let index = if index < 0 {
+                    s.len() as i32 + index
+                } else {
+                    index
                 };
-                if index < 0 {
-                    index = s.len() as i32 + index;
-                }
-                let CharVal(v) = val else {
-                    return Err(format!("Value must be an `String` not `{ty}`.", ty = val.ty()))
-                };
+                let v = val.as_char()?; 
                 if s.len() < index as usize {
                     return Err("Index out of bounds".to_string())
                 }
@@ -466,12 +501,12 @@ impl Value {
                 Ok(StringVal(s))
             },
             ListVal(list) => {
-                let IntegerVal(mut index) = index else {
-                    return Err(format!("Index must be an `Integer` not `{ty}`.", ty = index.ty()))
+                let index = index.as_integer()?;
+                let index = if index < 0 {
+                    list.len() as i32 + index
+                } else {
+                    index
                 };
-                if index < 0 {
-                    index = list.len() as i32 + index;
-                }
                 let mut list = list.clone();
                 match list.get_mut(index as usize) {
                     Some(v) => {
@@ -508,7 +543,8 @@ impl Value {
         }
 
         match self {
-            FunVal { args, body } => {
+            FunVal     { args, body } |
+            ClosureVal { args, body, .. } => {
                 if vals.len() != args.len() {
                     return Err((format!("Expected {} arguments but {} given", args.len(), vals.len()), None))
                 }
@@ -518,46 +554,11 @@ impl Value {
                 }
 
                 engine.enter_scope();
-                handle(engine.collect_definition(body))?;
-                for (arg, v) in std::iter::zip(args, vals) {
-                    engine.define(arg.to_string(), v);
-                }
-                
-                for stmt in &body[..body.len() - 1] {
-                    let state = handle(engine.run(stmt))?;
-                    if let State::Return(val) = state {
-                        engine.exit_scope();
-                        return Ok(val)
+                if let ClosureVal { closure, .. } = self {
+                    for (arg, v) in closure {
+                        engine.define(arg.to_string(), v.to_owned());
                     }
                 }
-                
-                // If the last statement is an expression return the value
-                let stmt = body.last().unwrap();
-                let rv = match &stmt.data {
-                    Stmt::ExprStmt(e) => handle(engine.eval(e))?,
-                    _ => match handle(engine.run(stmt))? {
-                        State::Return(val) => val,
-                        _ => NothingVal,
-                    }
-                };
-                engine.exit_scope();
-                
-                Ok(rv)
-            },
-            ClosureVal { args, body, closure } => {
-                if vals.len() != args.len() {
-                    return Err((format!("Expected {} arguments but {} given", args.len(), vals.len()), None))
-                }
-                
-                if body.is_empty() {
-                    return Ok(NothingVal)
-                }
-
-                engine.enter_scope();
-                for (arg, v) in closure {
-                    engine.define(arg.to_string(), v.to_owned());
-                }
-
                 handle(engine.collect_definition(body))?;
                 for (arg, v) in std::iter::zip(args, vals) {
                     engine.define(arg.to_string(), v);

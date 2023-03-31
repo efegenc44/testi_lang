@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    error::error::{ Error, Res, simple_error },
+    error::error::{ Error, Res, simple_error, handle },
     ast::{
         stmt::Stmt::{ self, * },
         expr::{
@@ -30,43 +30,17 @@ impl BinaryOp {
             BinaryOp::Mul => left * right,
             BinaryOp::Div => left / right,
             BinaryOp::Mod => left % right,
-            BinaryOp::Eq => Ok(BoolVal(left == right)),
-            BinaryOp::Ne => Ok(BoolVal(left != right)),
-            BinaryOp::Lt => left.less(right).map(|r| {
-                BoolVal(r)
-            }),
-            BinaryOp::Gt => left.greater(right).map(|r| {
-                BoolVal(r)
-            }),
-            BinaryOp::Le => left.less_or_equal(right).map(|r| {
-                BoolVal(r)
-            }),
-            BinaryOp::Ge => left.greater_or_equal(right).map(|r| {
-                BoolVal(r)
-            }),
+            BinaryOp::Eq  => Ok(BoolVal(left == right)),
+            BinaryOp::Ne  => Ok(BoolVal(left != right)),
+            BinaryOp::Lt  => left.less(right).map(BoolVal),
+            BinaryOp::Gt  => left.greater(right).map(BoolVal),
+            BinaryOp::Le  => left.less_or_equal(right).map(BoolVal),
+            BinaryOp::Ge  => left.greater_or_equal(right).map(BoolVal),
             BinaryOp::And => left & right,
             BinaryOp::Or  => left | right,
-            BinaryOp::Is => {
-                let TypeVal(ty) = right else {
-                    return Err(format!("Expected `Type` not {ty} at right side.", ty = right.ty()))
-                };
-                Ok(BoolVal(&left.ty() == ty))                
-            },
-            BinaryOp::Xrn |
-            BinaryOp::Irn => {
-                let IntegerVal(bot) = left else {
-                    return Err(format!("Range bounds expected to be `Integer` not `{ty}`.", ty = left.ty()))
-                };
-                let IntegerVal(up) = right else {
-                    return Err(format!("Range bounds expected to be `Integer` not `{ty}`.", ty = right.ty()))
-                };
-                
-                Ok(if let BinaryOp::Irn = self {
-                    RangeVal(*bot, *up+1)   
-                } else {
-                    RangeVal(*bot, *up)   
-                })
-            },
+            BinaryOp::Is  => Ok(BoolVal(left.ty() == right.as_type()?)),                
+            BinaryOp::Xrn => Ok(RangeVal(left.as_integer()?, right.as_integer()?)),
+            BinaryOp::Irn => Ok(RangeVal(left.as_integer()?, right.as_integer()?+1))   
         }
     }
 }
@@ -165,17 +139,11 @@ impl Engine {
                 Err(err) => simple_error(err, assignee.span),
             },
             IndexExpr { from, index_expr } => {
-                self.eval(from)?.indexable().map_err(|err| {
-                    Error::new(err, from.span, None)
-                })?.replace(self.eval(index_expr)?, val).map_err(|err| {
-                   Error::new(err, index_expr.span, None)
-                })            
+                handle(handle(self.eval(from)?.indexable(), from.span)?
+                    .replace(self.eval(index_expr)?, val), index_expr.span)
             },
             AccessExpr { from, member } => {
-                let from_val = self.eval(from)?;
-                let InstanceVal { type_name, mut members } = from_val else {
-                    return simple_error(format!("`{ty}` has no member.", ty = from_val.ty()), from.span)
-                };
+                let (type_name, mut members) = handle(self.eval(from)?.as_instance(), from.span)?;
                 match members.insert(member.clone(), val) {
                     Some(_) => Ok(InstanceVal { type_name, members }),
                     None    => simple_error(format!("`{type_name}` has no member called `{member}`"), from.span),
@@ -213,11 +181,7 @@ impl Engine {
             },
             IfStmt { branches, elss } => {
                 for (cond, branch) in branches {
-                    let cond_val = self.eval(cond)?;
-                    let BoolVal(b) = cond_val else {
-                        return simple_error(format!("Expected `Bool` for if condition, not `{ty}`.", ty = cond_val.ty()), cond.span)
-                    };
-                    if b {
+                    if handle(self.eval(cond)?.as_bool(), cond.span)? {
                         return self.run_block(branch)
                     }
                 }
@@ -227,11 +191,7 @@ impl Engine {
             },
             WhileStmt { cond, body } => {
                 loop {
-                    let cond_val = self.eval(cond)?;
-                    let BoolVal(b) = cond_val else {
-                        return simple_error(format!("Expected `Bool` for while condition, not `{ty}`.", ty = cond_val.ty()), cond.span)
-                    };
-                    if !b {
+                    if handle(self.eval(cond)?.as_bool(), cond.span)? {
                         break;
                     }
                     let res = self.run_block(body)?;
@@ -244,10 +204,7 @@ impl Engine {
                 }
             },
             ForStmt { var, iter, body } => {
-                let iter = self.eval(iter)?.iter().map_err(|err| {
-                    Error::new(err, iter.span, None)
-                })?;
-                for i in iter {
+                for i in handle(self.eval(iter)?.iter(), iter.span)? {
                     self.enter_scope();
                     self.collect_definition(body)?;
                     self.define(var.to_string(), i);
@@ -281,24 +238,17 @@ impl Engine {
             AssignmentExpr { op, assignee, expr: e } => {
                 let val = self.eval(e)?;
                 let aval = self.eval(assignee)?;
-                let val = match op {
+                let val = handle(match op {
                     AssignOp::Normal => Ok(val),
                     AssignOp::Add    => BinaryOp::Add.eval(&aval, &val),
                     AssignOp::Sub    => BinaryOp::Sub.eval(&aval, &val),
                     AssignOp::Mul    => BinaryOp::Mul.eval(&aval, &val),
                     AssignOp::Div    => BinaryOp::Div.eval(&aval, &val),
-                }.map_err(|err| {
-                    Error::new(err, expr.span, None)
-                })?;
+                }, expr.span)?;
                 self.assign(assignee, val.clone())
             },
-            BinaryExpr { op, left, right } => op.eval(&self.eval(left)?,
-                                                      &self.eval(right)?).map_err(|err| {
-                    Error::new(err, expr.span, None)
-            }),
-            UnaryExpr { op, operand } => op.eval(&self.eval(operand)?).map_err(|err| {
-                Error::new(err, expr.span, None)
-            }),
+            BinaryExpr { op, left, right } => handle(op.eval(&self.eval(left)?, &self.eval(right)?), expr.span),
+            UnaryExpr  { op, operand }     => handle(op.eval(&self.eval(operand)?), expr.span),
             ApplicationExpr { applied, exprs } => {
                 let mut values = vec![];
                 for expr in exprs {
@@ -309,17 +259,11 @@ impl Engine {
                 })
             },
             IndexExpr { from, index_expr } => {
-                self.eval(from)?.indexable().map_err(|err| {
-                    Error::new(err, from.span, None)
-                })?.index(self.eval(index_expr)?).map_err(|err| {
-                    Error::new(err, index_expr.span, None)
-                })
+                handle(handle(self.eval(from)?.indexable(), from.span)?
+                    .index(self.eval(index_expr)?), index_expr.span)
             },
             AccessExpr { from, member } => {
-                let from_val = self.eval(from)?;
-                let InstanceVal { type_name, members } = from_val else {
-                    return simple_error(format!("`{ty}` has no member.", ty = from_val.ty()), from.span)
-                };
+                let (type_name, members) = handle(self.eval(from)?.as_instance(), from.span)?;
                 match members.get(member) {
                     Some(val) => Ok(val.clone()),
                     None      => simple_error(format!("`{type_name}` has no member called `{member}`"), from.span),
@@ -345,10 +289,7 @@ impl Engine {
             MapExpr(pairs)   => {
                 let mut map = HashMap::new();
                 for (key, value) in pairs {
-                    let key = TryInto::try_into(self.eval(key)?).map_err(|err| {
-                        Error::new(err, key.span, None)
-                    })?;
-                    map.insert(key, self.eval(value)?);
+                    map.insert(handle(self.eval(key)?.try_into(), key.span)?, self.eval(value)?);
                 } 
                 Ok(MapVal(map))
             },
@@ -357,9 +298,7 @@ impl Engine {
             StringExpr(s)    => Ok(StringVal(s.to_string())),
             BoolExpr(b)      => Ok(BoolVal(*b)),
             NothingExpr      => Ok(NothingVal),
-            Variable(var)    => Ok(self.resolve(var).map_err(|err| {
-                    Error::new(err, expr.span, None)
-            })?),
+            Variable(var)    => Ok(handle(self.resolve(var), expr.span)?),
         }
     }
 }
