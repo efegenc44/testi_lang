@@ -67,7 +67,7 @@ impl Lexer {
         if self.peek() == '\0' {
             return simple_error(
                 "Unterminated string literal.", 
-                Span::new(self.col, 0, start, self.row)
+                Span::new(self.col, self.col, start, self.row)
             )
         }
         let string = self.chars[string_start..self.cursor].iter().collect();
@@ -120,7 +120,7 @@ impl Lexer {
     }
 
     fn spanned(&self, token: Token, start: usize) -> Option<Res<Spanned<Token>>> {
-        Some(Ok(Spanned::new(token, Span::new(self.col, 0, start, self.row))))
+        Some(Ok(Spanned::new(token, Span::new(self.col, self.col, start, self.row))))
     }
     
     fn next_token(&mut self) -> Option<Res<Spanned<Token>>> {
@@ -229,7 +229,7 @@ impl Lexer {
             ' ' => return self.next_token(),
             _   => return Some(simple_error(
                 format!("Unknown start of token `{ch}`"),
-                Span::new(self.col, 0, start, self.row)
+                Span::new(self.col, self.col, start, self.row)
             ))
         };
         self.spanned(token, start)

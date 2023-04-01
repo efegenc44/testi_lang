@@ -26,18 +26,18 @@ impl<'a> Repoter<'a>
     // TODO: Refactor 
     pub fn report(&mut self, err: Error, stage: &str) 
     {
-        let Span { first_line: line_no, last_line: multiline, start, end } = err.span;
+        let Span { first_line, last_line, start, end } = err.span;
 
-        eprintln!("\n  Error | [{source_name}:{line_no}:{start}] (at {stage})", source_name = self.source_name); 
+        eprintln!("\n  Error | [{source_name}:{first_line}:{start}] (at {stage})", source_name = self.source_name); 
         eprintln!("        |");
         
-        let fline = self.lines.clone().nth(line_no - 1).unwrap();
-        eprintln!("   {line_no:>4} | {fline}"); 
+        let fline = self.lines.clone().nth(first_line - 1).unwrap();
+        eprintln!("   {first_line:>4} | {fline}"); 
         eprint!  ("        | ");
         
         Self::print_multiple(" ", 1..start);
         
-        if multiline == 0 {
+        if last_line == first_line {
             Self::print_multiple("^", start..end);
             eprintln!();
             eprintln!("        | {msg}\n", msg = err.msg); 
@@ -57,7 +57,7 @@ impl<'a> Repoter<'a>
         eprintln!();
 
         // Middle Lines if there is
-        for line_no2 in line_no+1..multiline {
+        for line_no2 in first_line+1..last_line {
             let line = self.lines.clone().nth(line_no2 - 1).unwrap();
             eprintln!("   {line_no2:>4} | {line}");
             eprint!  ("        | ");
@@ -66,8 +66,8 @@ impl<'a> Repoter<'a>
         }
         
         // Last Line
-        let lline = self.lines.clone().nth(multiline - 1).unwrap();
-        eprintln!("   {multiline:>4} | {lline}"); 
+        let lline = self.lines.clone().nth(last_line - 1).unwrap();
+        eprintln!("   {last_line:>4} | {lline}"); 
         eprint!  ("        | ");
         Self::print_multiple("^", 1..end);
         eprintln!();

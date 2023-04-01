@@ -1,7 +1,7 @@
 #[derive(Clone, Copy, Debug)]
 pub struct Span {
-    pub first_line: usize, // If last_line is 0, this is effectively the last line. 
-    pub last_line : usize, // 0 if span is in a single-line.
+    pub first_line: usize, 
+    pub last_line : usize,
     pub start     : usize, 
     pub end       : usize, 
 }
@@ -11,29 +11,10 @@ impl Span {
         Self { first_line, last_line, start, end }
     }
 
-    pub fn last(&self) -> usize {
-        //   If span is multi-line, it's line is the last, 
-        // otherwise the line that it's at 
-        if self.last_line == 0 {
-            self.first_line
-        } else {
-            self.last_line
-        }
-    }
-
     pub fn extend(&self, other: Span) -> Span {
-        //   Span are on the same line, if and only if 
-        // the most left element's first line is equal to
-        // the most right element's last line
-        let multiline = if self.first_line == other.last() {
-            0
-        } else {
-            other.last()
-        };
-
         Span::new(
             self.first_line, 
-            multiline, 
+            other.last_line, 
             self.start, 
             other.end
         )
