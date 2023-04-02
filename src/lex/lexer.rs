@@ -34,7 +34,7 @@ impl Lexer {
     }
 
     fn advance(&mut self) {
-        self.row    += 1;
+        self.col    += 1;
         self.cursor += 1;
     }
 
@@ -57,23 +57,34 @@ impl Lexer {
     }
 
     fn string(&mut self) -> Res<Token> {
-        let start = self.row;
+        let start = self.col;
+        let first_line = self.row;
         // Consume '"' and advance.
         self.advance();
         let string_start = self.cursor;
         while self.peek() != '"' && self.peek() != '\0' {
+            if self.peek() == '\n' {
+                self.row += 1;
+                self.col  = 0; // self.advance() already increments col
+            }
             self.advance();
         }
+
         if self.peek() == '\0' {
             return simple_error(
                 "Unterminated string literal.", 
-                Span::new(self.col, self.col, start, self.row)
+                Span::new(first_line, self.row, start, self.col)
             )
         }
-        let string = self.chars[string_start..self.cursor].iter().collect();
-        // Consume closing '"' and advance.
-        self.advance();
-        Ok(STRING(string))
+        let range = string_start..self.cursor;
+        self.advance(); // Consume closing '"' and advance.
+        if range.len() == 1 {
+            let ch = self.chars[string_start];
+            Ok(CHAR(ch))
+        } else {
+            let string = self.chars[range].iter().collect();
+            Ok(STRING(string))
+        }
     }
 
     fn number(&mut self) -> Token {
@@ -120,11 +131,11 @@ impl Lexer {
     }
 
     fn spanned(&self, token: Token, start: usize) -> Option<Res<Spanned<Token>>> {
-        Some(Ok(Spanned::new(token, Span::new(self.col, self.col, start, self.row))))
+        Some(Ok(Spanned::new(token, Span::new(self.row, self.row, start, self.col))))
     }
     
     fn next_token(&mut self) -> Option<Res<Spanned<Token>>> {
-        let start = self.row;
+        let start = self.col;
         
         if self.cursor == self.chars.len() {
             return None
@@ -220,8 +231,8 @@ impl Lexer {
             },
             '\0' => END,
             '\n' => {
-                self.col += 1;
-                self.row =  1;
+                self.row += 1;
+                self.col  = 1;
                 return self.next_token()
             },
             '\r' |
@@ -229,7 +240,7 @@ impl Lexer {
             ' ' => return self.next_token(),
             _   => return Some(simple_error(
                 format!("Unknown start of token `{ch}`"),
-                Span::new(self.col, self.col, start, self.row)
+                Span::new(self.row, self.row, start, self.col)
             ))
         };
         self.spanned(token, start)

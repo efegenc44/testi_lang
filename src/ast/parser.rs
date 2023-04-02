@@ -120,6 +120,7 @@ impl Parser {
         let mut expr = match ct {
             SYMBOL(sym)  => Spanned::new(Variable(sym)   , cs),
             STRING(s)    => Spanned::new(StringExpr(s)   , cs),
+            CHAR(ch)     => Spanned::new(CharExpr(ch)    , cs),
             NATURAL(int) => Spanned::new(NaturalExpr(int), cs),
             FLOAT(float) => Spanned::new(FloatExpr(float), cs),
             KTRUE        => Spanned::new(BoolExpr(true)  , cs),

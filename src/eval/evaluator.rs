@@ -296,6 +296,7 @@ impl Engine {
             NaturalExpr(nat) => Ok(IntegerVal(*nat as i32)),
             FloatExpr(float) => Ok(FloatVal(*float)),
             StringExpr(s)    => Ok(StringVal(s.to_string())),
+            CharExpr(ch)     => Ok(CharVal(*ch)),
             BoolExpr(b)      => Ok(BoolVal(*b)),
             NothingExpr      => Ok(NothingVal),
             Variable(var)    => Ok(handle(self.resolve(var), expr.span)?),

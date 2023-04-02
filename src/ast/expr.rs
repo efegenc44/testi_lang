@@ -169,6 +169,7 @@ pub enum Expr {
     NaturalExpr(usize),
     FloatExpr(f32),
     StringExpr(String),
+    CharExpr(char),
     BoolExpr(bool),
     Variable(String),
     NothingExpr,

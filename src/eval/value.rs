@@ -229,7 +229,10 @@ impl std::ops::Add for &Value {
         match (self, rhs) {
             (IntegerVal(int1), IntegerVal(int2)) => Ok(IntegerVal(int1 + int2)),
             (FloatVal(float1), FloatVal(float2)) => Ok(FloatVal(float1 + float2)),
-            (StringVal(s1)   , StringVal(s2)   ) => Ok(StringVal(s1.to_owned() + s2)),
+            (StringVal(s1)   , StringVal(s2)   ) => Ok(StringVal(format!("{s1}{s2}"))),
+            (CharVal(ch1)    , CharVal(ch2)    ) => Ok(StringVal(format!("{ch1}{ch2}"))),
+            (CharVal(ch)     , StringVal(s)    ) => Ok(StringVal(format!("{ch}{s}"))),
+            (StringVal(s)    , CharVal(ch)     ) => Ok(StringVal(format!("{s}{ch}"))),
             (ListVal(list), _) => {
                 let mut list = list.to_owned();
                 list.push(rhs.to_owned());

@@ -4,6 +4,7 @@ use std::fmt::Display;
 pub enum Token {
     SYMBOL(String),
     STRING(String),
+    CHAR(char),
     NATURAL(usize),
     FLOAT(f32),
     PLUS,
@@ -63,6 +64,7 @@ impl Display for Token {
         match self {
             Token::SYMBOL(sym)  => write!(f, "{sym}"),
             Token::STRING(s)    => write!(f, "\"{s}\""),
+            Token::CHAR(ch)     => write!(f, "\"{ch}\""),
             Token::NATURAL(nat) => write!(f, "{nat}"),
             Token::FLOAT(float) => write!(f, "{float}"),
             Token::PLUS         => write!(f, "+"),

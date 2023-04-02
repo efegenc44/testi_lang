@@ -12,8 +12,7 @@ pub struct Repoter<'a>
 
 impl<'a> Repoter<'a> 
 {
-    pub fn new(source_name: &'a str, source: &'a str) -> Self 
-    {
+    pub fn new(source_name: &'a str, source: &'a str) -> Self {
         Self { source_name, lines: source.lines() }
     }
     
@@ -24,8 +23,7 @@ impl<'a> Repoter<'a>
     }
 
     // TODO: Refactor 
-    pub fn report(&mut self, err: Error, stage: &str) 
-    {
+    pub fn report(&mut self, err: Error, stage: &str) {
         let Span { first_line, last_line, start, end } = err.span;
 
         eprintln!("\n  Error | [{source_name}:{first_line}:{start}] (at {stage})", source_name = self.source_name); 
