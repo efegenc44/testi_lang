@@ -13,6 +13,6 @@ fun iter_fac(n)
     acc
 end
 
-let user_input = Integer(input())
+let user_input = input().parse_integer()
 print(fac(user_input))
 print(iter_fac(user_input))

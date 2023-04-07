@@ -18,7 +18,6 @@ use super::{
         Value::{ self, * },
         ExprResult
     },
-    r#type::Type::*,
     std::get_global,
 };
 
@@ -95,7 +94,7 @@ impl Engine {
         Err(format!("Undefined symbol `{var}`."))
     }
 
-    fn resolve(&self, var: &String) -> Result<Value, String> {
+    pub fn resolve(&self, var: &String) -> Result<Value, String> {
         let len = self.ctx.len();
         for index in 0..len {
             let scope = &self.ctx[(len-1) - index];
@@ -155,12 +154,12 @@ impl Engine {
     
     pub fn run(&mut self, stmt: &Spanned<Stmt>) -> Res<State> {
         match &stmt.data { 
-            DefStmt { name, mems } => {
-                let ty = CustomTy { 
-                    name: name.to_owned(),
-                    mems: mems.to_owned()
-                };
-                self.define(name.to_owned(), TypeVal(ty));
+            DefStmt { name, mems, mets } => {
+                self.define(name.to_owned(), DefVal { 
+                    name: name.to_owned(), 
+                    members: mems.to_owned(), 
+                    methods: mets.to_owned(), 
+                });
             },
             LetStmt { var, expr } => {
                 let value = self.eval(expr)?;
@@ -263,11 +262,39 @@ impl Engine {
                     .index(self.eval(index_expr)?), index_expr.span)
             },
             AccessExpr { from, member } => {
-                let (type_name, members) = handle(self.eval(from)?.as_instance(), from.span)?;
-                match members.get(member) {
-                    Some(val) => Ok(val.clone()),
-                    None      => simple_error(format!("`{type_name}` has no member called `{member}`"), from.span),
+                let value = self.eval(from)?;
+                match value {
+                    InstanceVal {..} => {
+                        let (_, members) = handle(value.as_instance(), from.span)?;
+                        match members.get(member) {
+                            Some(val) => return Ok(val.clone()),
+                            None      => (),
+                        }
+                    }
+                    _ => ()
                 }
+                let ty = value.ty();
+                if let DefVal { methods, .. } = self.resolve(&ty.to_string()).unwrap() {
+                    return match methods.get(member) {
+                        Some(met) => Ok(MethodVal {
+                            value: Box::new(value), 
+                            args: met.args.clone(), 
+                            body: met.body.clone() 
+                        }),
+                        None => simple_error(format!("`{ty}` has no member, nor method called `{member}`"), from.span),
+                    }
+                };
+                if let BuiltInDefVal { methods, .. } = self.resolve(&ty.to_string()).unwrap() {
+                    return match methods.get(member) {
+                        Some(met) => Ok(BuiltInMethodVal {
+                            value: Box::new(value),
+                            arity: met.arity,
+                            fun: met.fun,
+                        }),
+                        None => simple_error(format!("`{ty}` has no member, nor method called `{member}`"), from.span),
+                    }
+                };
+                simple_error(format!("`{ty}` has no member, nor method called `{member}`"), from.span)
             },
             FunctionExpr { args, body, closure } => Ok(if let Some(closure) = closure {
                 let mut closure_map = HashMap::new();

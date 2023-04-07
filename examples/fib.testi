@@ -25,6 +25,6 @@ fun memoized_fib(n)
     fib(n)
 end
 
-let user_input = Integer(input())
+let user_input = input().parse_integer()
 print(fib(user_input))
 print(memoized_fib(user_input))

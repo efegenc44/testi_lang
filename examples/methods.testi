@@ -1,0 +1,19 @@
+def Vector2
+    x y
+impl
+    fun add(other)
+        Vector2(
+            self.x + other.x,
+            self.y + other.y
+        )
+    end
+end
+
+def Vector3
+    x y z
+end
+
+let v = Vector2(3, 4)
+print(v.add(Vector3(4, 5, 6)))
+
+10.times(print, ["Hi!"])

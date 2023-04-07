@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::span::Spanned;
 
 use super::expr::Expr;
@@ -6,7 +8,8 @@ use super::expr::Expr;
 pub enum Stmt {
     DefStmt {
         name: String,
-        mems: Vec<String>
+        mems: Vec<String>,
+        mets: HashMap<String, Function> 
     },
     LetStmt {
         var: String,
@@ -43,4 +46,11 @@ pub enum Stmt {
     ContinueStmt,
     BreakStmt,
     ExprStmt(Spanned<Expr>),
+}
+
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub name: String,
+    pub args: Vec<String>,
+    pub body: Vec<Spanned<Stmt>>
 }

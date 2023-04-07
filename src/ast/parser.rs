@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     span::{ Span, Spanned}, 
     lex::token::Token::{ self, * },
@@ -6,7 +8,7 @@ use crate::{
 
 use super::{
     expr::Expr::{ self, * },
-    stmt::Stmt::{ self, * },
+    stmt::{Stmt::{ self, * }, Function},
 };
 
 pub struct Parser {
@@ -535,12 +537,41 @@ impl Parser {
         self.advance();
         let name = self.consume_symbol()?;
         let mut mems = vec![];
-        while self.peek() != KEND {
+        while self.peek() != KEND && self.peek() != KIMPL {
             mems.push(self.consume_symbol()?);
         }
+        let mets = if self.optional(&KIMPL) {
+            let mut mets = HashMap::new();
+            while self.peek() != KEND {
+                let met = self.def_method()?;
+                mets.insert(met.data.name.clone(), met.data);
+            }   
+            mets 
+        } else {
+            HashMap::new()
+        };
+
         let end_span = self.span(); 
         self.consume(&KEND)?;
-        Ok(Spanned::new(DefStmt { name, mems }, def_span.extend(end_span)))
+        Ok(Spanned::new(DefStmt { name, mems, mets }, def_span.extend(end_span)))
+    }
+
+    fn def_method(&mut self) -> Res<Spanned<Function>> {
+        self.in_fun += 1;
+        let fun_span = self.span();
+        self.advance();
+        
+        let name = self.consume_symbol()?;
+        let args = self.args()?;
+        let mut body = vec![];
+        while self.peek() != KEND {
+            body.push(self.statement()?)
+        }
+        let end_span = self.span();
+        self.consume(&KEND)?;
+        self.in_fun -= 1;
+        
+        Ok(Spanned::new(Function { name, args, body }, fun_span.extend(end_span)))
     }
 
     fn statement(&mut self) -> Res<Spanned<Stmt>> {

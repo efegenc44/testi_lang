@@ -1,4 +1,4 @@
-let user_input = Integer(input())
+let user_input = input().parse_integer()
 
 fun divides(q, p)
     p mod q == 0

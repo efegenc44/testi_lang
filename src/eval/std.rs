@@ -1,15 +1,47 @@
 use std::collections::HashMap;
 
 use super::{
-    value::Value::{ self, * },
+    value::{Value::{ self, * }, BuiltInFunction},
     r#type::Type::*
 };
 
 pub fn get_global() -> HashMap<String, Value> {
     let global = HashMap::from([
-        ("Integer".to_string()  , TypeVal(IntegerTy)),
+        ("Integer".to_string(), BuiltInDefVal { 
+            name: String::from("Integer"),
+            members: vec![], 
+            methods: HashMap::from([
+                (String::from("times"), BuiltInFunction { arity: 2, fun: |values, engine| {
+                    let v = values.last().unwrap().as_integer().unwrap();
+                    let FunTy = values[0].ty() else {
+                        return Err((format!("Expected `Function` as first argument, not `{ty}`", ty = values[0].ty()), None));
+                    };
+                    let ListVal(list) = &values[1] else {
+                        return Err((format!("Expected `List` as second argument, not `{ty}`", ty = values[1].ty()), None));
+                    };
+                    for _ in 0..v {
+                        values[0].apply(list.clone(), engine)?;
+                    }
+                    Ok(NothingVal)
+                }})
+            ]) 
+        }),
+
+        ("String".to_string(), BuiltInDefVal { 
+            name: String::from("String"),
+            members: vec![], 
+            methods: HashMap::from([
+                (String::from("parse_integer"), BuiltInFunction { arity: 0, fun: |values, _| {
+                    let v = values.last().unwrap().as_string().unwrap();
+                    match v.parse() {
+                        Ok(int) => Ok(IntegerVal(int)),
+                        Err(_)  => Err((format!("Couldn't convert to `Integer`"), None))
+                    }
+                }})
+            ]) 
+        }),
+        
         ("Float".to_string()    , TypeVal(FloatTy)),
-        ("String".to_string()   , TypeVal(StringTy)),
         ("Character".to_string(), TypeVal(CharTy)),
         ("Bool".to_string()     , TypeVal(BoolTy)),
         ("Function".to_string() , TypeVal(FunTy)),

@@ -5,5 +5,5 @@ fun add_function(f, b)
 end
 
 let f = add_function(\x. x+2 end, \x. x*2 end);
-let user_input = Integer(input())
+let user_input = input().parse_integer()
 print(f(user_input))

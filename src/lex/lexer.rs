@@ -89,7 +89,8 @@ impl Lexer {
 
     fn number(&mut self) -> Token {
         let whole_part = self.digit_sequence();
-        if self.peek() == '.' && self.chars[self.cursor+1] != '.' {
+        if self.peek() == '.' && 
+           self.chars[self.cursor+1].is_ascii_digit() {
             self.advance();
             let fractional_part = self.digit_sequence();
             return FLOAT((whole_part + "." + &fractional_part).parse().unwrap())
@@ -112,6 +113,7 @@ impl Lexer {
             "let"      => KLET,
             "fun"      => KFUN,
             "def"      => KDEF,
+            "impl"     => KIMPL,
             "for"      => KFOR,
             "in"       => KIN,
             "while"    => KWHILE,
