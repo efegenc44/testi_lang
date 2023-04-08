@@ -2,10 +2,12 @@ def Vector2
     x y
 impl
     fun add(other)
-        Vector2(
-            self.x + other.x,
-            self.y + other.y
-        )
+        Vector2(self.x + other.x,
+                self.y + other.y)
+    end
+    
+    fun neg()
+        Vector2(-self.x, -self.y)
     end
 end
 
@@ -14,6 +16,8 @@ def Vector3
 end
 
 let v = Vector2(3, 4)
-print(v.add(Vector3(4, 5, 6)))
+v += Vector3(4, 5, 6)
+print(v)
+print(-v)
 
 10.times(print, ["Hi!"])

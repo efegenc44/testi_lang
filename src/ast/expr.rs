@@ -20,7 +20,6 @@ pub enum BinaryOp {
     Le,
     And,
     Or,
-    Is,
     Xrn,
     Irn
 }
@@ -41,7 +40,6 @@ impl std::fmt::Display for BinaryOp {
             BinaryOp::Le  => write!(f, "<="),
             BinaryOp::And => write!(f, "and"),
             BinaryOp::Or  => write!(f, "or"),
-            BinaryOp::Is  => write!(f, "is"),
             BinaryOp::Xrn => write!(f, ".."),
             BinaryOp::Irn => write!(f, "..="),
         }
@@ -64,7 +62,6 @@ impl From<Token> for BinaryOp {
             Token::LESSEQUAL    => Self::Le,
             Token::KAND         => Self::And,
             Token::KOR          => Self::Or,
-            Token::KIS          => Self::Is,
             Token::TWODOT       => Self::Xrn,
             Token::TWODOTEQUAL  => Self::Irn,
             _ => unreachable!(),
@@ -100,20 +97,14 @@ impl From<Token> for UnaryOp {
 #[derive(Debug, Clone, Copy)]
 pub enum AssignOp {
     Normal,
-    Add,
-    Sub,
-    Mul,
-    Div,
+    Composite(BinaryOp)
 }
 
 impl std::fmt::Display for AssignOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AssignOp::Normal => write!(f, "="),
-            AssignOp::Add    => write!(f, "+="),
-            AssignOp::Sub    => write!(f, "-="),
-            AssignOp::Mul    => write!(f, "*="),
-            AssignOp::Div    => write!(f, "/="),
+            AssignOp::Normal         => write!(f, "="),
+            AssignOp::Composite(bop) => write!(f, "{bop}")
         }
     }
 }
@@ -122,10 +113,10 @@ impl From<Token> for AssignOp {
     fn from(value: Token) -> Self {
         match value {
             Token::EQUAL      => Self::Normal,
-            Token::PLUSEQUAL  => Self::Add,
-            Token::MINUSEQUAL => Self::Sub,
-            Token::STAREQUAL  => Self::Mul,
-            Token::SLASHEQUAL => Self::Div,
+            Token::PLUSEQUAL  => Self::Composite(BinaryOp::Add),
+            Token::MINUSEQUAL => Self::Composite(BinaryOp::Sub),
+            Token::STAREQUAL  => Self::Composite(BinaryOp::Mul),
+            Token::SLASHEQUAL => Self::Composite(BinaryOp::Div),
             _ => unreachable!(),
         }
     }
@@ -158,6 +149,10 @@ pub enum Expr {
     AccessExpr {
         from: Box<Spanned<Expr>>,
         member: String,
+    },
+    TypeTestExpr {
+        expr: Box<Spanned<Expr>>,
+        ty: Box<Spanned<Expr>>
     },
     FunctionExpr {
         args: Vec<String>,

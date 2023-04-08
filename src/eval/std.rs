@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use super::{
-    value::{Value::{ self, * }, BuiltInFunction},
-    r#type::Type::*
-};
+use super::value::{ Value::{ self, * }, BuiltInFunction };
 
 pub fn get_global() -> HashMap<String, Value> {
     let global = HashMap::from([
@@ -13,9 +10,6 @@ pub fn get_global() -> HashMap<String, Value> {
             methods: HashMap::from([
                 (String::from("times"), BuiltInFunction { arity: 2, fun: |values, engine| {
                     let v = values.last().unwrap().as_integer().unwrap();
-                    let FunTy = values[0].ty() else {
-                        return Err((format!("Expected `Function` as first argument, not `{ty}`", ty = values[0].ty()), None));
-                    };
                     let ListVal(list) = &values[1] else {
                         return Err((format!("Expected `List` as second argument, not `{ty}`", ty = values[1].ty()), None));
                     };
@@ -23,6 +17,15 @@ pub fn get_global() -> HashMap<String, Value> {
                         values[0].apply(list.clone(), engine)?;
                     }
                     Ok(NothingVal)
+                }}),
+                (String::from("add"), BuiltInFunction { arity: 1, fun: |values, _| {
+                    let left  = values.last().unwrap().as_integer().unwrap();                    
+                    let right = values[0].as_integer().map_err(|err| (err, None))?;
+                    Ok(IntegerVal(left + right))
+                }}),
+                (String::from("neg"), BuiltInFunction { arity: 0, fun: |values, _| {
+                    let v = values.last().unwrap().as_integer().unwrap();                    
+                    Ok(IntegerVal(-v))
                 }})
             ]) 
         }),
@@ -41,14 +44,14 @@ pub fn get_global() -> HashMap<String, Value> {
             ]) 
         }),
         
-        ("Float".to_string()    , TypeVal(FloatTy)),
-        ("Character".to_string(), TypeVal(CharTy)),
-        ("Bool".to_string()     , TypeVal(BoolTy)),
-        ("Function".to_string() , TypeVal(FunTy)),
-        ("List".to_string()     , TypeVal(ListTy)),
-        ("Map".to_string()      , TypeVal(MapTy)),
-        ("Nothing".to_string()  , TypeVal(NothingTy)),
-        ("Type".to_string()     , TypeVal(TyTy)),
+        ("Float".to_string()    , TypeVal("Float".into())),
+        ("Character".to_string(), TypeVal("Character".into())),
+        ("Bool".to_string()     , TypeVal("Bool".into())),
+        ("Function".to_string() , TypeVal("Function".into())),
+        ("List".to_string()     , TypeVal("List".into())),
+        ("Map".to_string()      , TypeVal("Map".into())),
+        ("Nothing".to_string()  , TypeVal("Nothing".into())),
+        ("Type".to_string()     , TypeVal("Type".into())),
         ("print".to_string(), BuiltInFunVal {
             arity: 1, fun: |vals, _| {
                 println!("{}", vals[0]);
@@ -85,9 +88,6 @@ pub fn get_global() -> HashMap<String, Value> {
         ("map".to_string(), BuiltInFunVal { 
             arity: 2, fun: |vals, engine| {
                 let fv = vals.get(0).unwrap();
-                let FunTy = fv.ty() else {
-                    return Err((format!("Expected `Function` as first argument, not `{ty}`", ty = fv.ty()), None));
-                };
                 let sv = vals.get(1).unwrap();
                 let ListVal(list) = sv else {
                     return Err((format!("Expected `List` as second argument, not `{ty}`", ty = sv.ty()), None));

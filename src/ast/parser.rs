@@ -307,14 +307,12 @@ impl Parser {
     fn type_test(&mut self) -> Res<Spanned<Expr>> {
         let mut left = self.comparison()?;
         if let KIS = self.peek() {
-            let op = self.peek().into();
             self.advance();
             let right = self.comparison()?;
             let span = left.span.extend(right.span);
-            left = Spanned::new(BinaryExpr { 
-                op, 
-                left : Box::new(left), 
-                right: Box::new(right) 
+            left = Spanned::new(TypeTestExpr { 
+                expr: Box::new(left), 
+                ty: Box::new(right) 
             }, span)
         }
         Ok(left)

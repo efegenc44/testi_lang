@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use Value::*;
 
@@ -7,10 +7,7 @@ use crate::{
     span::Spanned, error::error::{ Error, Res }
 };
 
-use super::{
-    r#type::Type::{ self, * }, 
-    evaluator::{ Engine, State }
-};
+use super::evaluator::{ Engine, State };
 
 #[derive(Clone, PartialEq, Hash, Eq)]
 pub enum KeyValue {
@@ -44,7 +41,6 @@ impl TryInto<KeyValue> for Value {
         }
     }
 }
-
 
 impl Into<Value> for KeyValue {
     fn into(self) -> Value {
@@ -101,7 +97,7 @@ pub enum Value {
         fun: fn(vals: Vec<Value>, engine: &mut Engine) -> Result<Value, (String, Option<Error>)>
     },
     NothingVal,
-    TypeVal(Type),
+    TypeVal(String),
     DefVal {
         name: String,
         members: Vec<String>,
@@ -119,7 +115,7 @@ impl std::fmt::Display for Value {
         match self {
             IntegerVal(int)    => write!(f, "{int}"),
             FloatVal(float)    => write!(f, "{float}"),
-            StringVal(s)       => write!(f, "\"{s}\""),
+            StringVal(s)       => write!(f, "{s}"),
             CharVal(ch)        => write!(f, "{ch}"),
             BoolVal(b)         => write!(f, "{b}"),
             ListVal(list)      => {
@@ -184,65 +180,71 @@ impl std::fmt::Debug for Value {
     }
 }
 
+pub fn is_builtin_type(ty: &str) -> bool {
+    HashSet::from(["Integer", "Float", "String", "Character", 
+                   "Bool", "List", "Map", "Range", "Method", 
+                   "Function", "Nothing", "Type"]).contains(ty)
+}
+
 impl Value {
-    pub fn ty(&self) -> Type {
+    pub fn ty(&self) -> String {
         match self {
-            IntegerVal(_)         => IntegerTy,
-            FloatVal(_)           => FloatTy,
-            StringVal(_)          => StringTy,
-            CharVal(_)            => CharTy,
-            BoolVal(_)            => BoolTy,
-            ListVal(_)            => ListTy,
-            MapVal(_)             => MapTy,
-            RangeVal(_, _)        => RangeTy,
-            MethodVal {..}        => MethodTy,
-            BuiltInMethodVal {..} => MethodTy,
-            FunVal {..}           => FunTy,
-            ClosureVal {..}       => FunTy,
-            BuiltInFunVal {..}    => FunTy,
-            NothingVal            => NothingTy,
-            TypeVal(_)            => TyTy,
-            DefVal {..}           => TyTy,
-            BuiltInDefVal {..}    => TyTy,
+            IntegerVal(_)         => "Integer",
+            FloatVal(_)           => "Float",
+            StringVal(_)          => "String",
+            CharVal(_)            => "Character",
+            BoolVal(_)            => "Bool",
+            ListVal(_)            => "List",
+            MapVal(_)             => "Map",
+            RangeVal(_, _)        => "Range",
+            MethodVal {..}        => "Method",
+            BuiltInMethodVal {..} => "Method",
+            FunVal {..}           => "Function",
+            ClosureVal {..}       => "Function",
+            BuiltInFunVal {..}    => "Function",
+            NothingVal            => "Nothing",
+            TypeVal(_)            => "Type",
+            DefVal {..}           => "Type",
+            BuiltInDefVal {..}    => "Type",
             
-            InstanceVal { type_name, .. } => CustomTy(type_name.to_owned()),
-        }
+            InstanceVal { type_name, .. } => type_name,
+        }.into()
     }
 
     pub fn as_integer(&self) -> Result<i32, String> {
         match self {
             IntegerVal(int) => Ok(*int),
-            _ => Err(format!("Expected {}, got {}.", IntegerTy, self.ty()))
+            _ => Err(format!("Expected Integer, got {}.", self.ty()))
         }
     }
 
     pub fn as_string(&self) -> Result<String, String> {
         match self {
             StringVal(s) => Ok(s.clone()),
-            _ => Err(format!("Expected {}, got {}.", IntegerTy, self.ty()))
+            _ => Err(format!("Expected String, got {}.", self.ty()))
         }
     }
 
     pub fn as_char(&self) -> Result<char, String> {
         match self {
             CharVal(ch) => Ok(*ch),
-            _ => Err(format!("Expected {}, got {}.", CharTy, self.ty()))
+            _ => Err(format!("Expected Character, got {}.", self.ty()))
         }
     }
 
     pub fn as_bool(&self) -> Result<bool, String> {
         match self {
             BoolVal(b) => Ok(*b),
-            _ => Err(format!("Expected {}, got {}.", BoolTy, self.ty()))
+            _ => Err(format!("Expected Bool, got {}.", self.ty()))
         }
     }
 
-    pub fn as_type(&self) -> Result<Type, String> {
+    pub fn as_type(&self) -> Result<String, String> {
         match self {
-            TypeVal(ty)                => Ok(ty.clone()),
-            DefVal { name, .. }        => Ok(CustomTy(name.clone())),
-            BuiltInDefVal { name, .. } => Ok(CustomTy(name.clone())),
-            _ => Err(format!("Expected {}, got {}.", TyTy, self.ty()))
+            TypeVal(ty)                 => Ok(ty.clone()),
+            DefVal { name, .. }         => Ok(name.clone()),
+            BuiltInDefVal { name, .. }  => Ok(name.clone()),
+            _ => Err(format!("Expected Type, got {}.", self.ty()))
         }
     }
 
@@ -256,185 +258,7 @@ impl Value {
 
 pub type ExprResult = Result<Value, String>;
 
-impl std::ops::Add for &Value {
-    type Output = ExprResult;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (IntegerVal(int1), IntegerVal(int2)) => Ok(IntegerVal(int1 + int2)),
-            (FloatVal(float1), FloatVal(float2)) => Ok(FloatVal(float1 + float2)),
-            (StringVal(s1)   , StringVal(s2)   ) => Ok(StringVal(format!("{s1}{s2}"))),
-            (CharVal(ch1)    , CharVal(ch2)    ) => Ok(StringVal(format!("{ch1}{ch2}"))),
-            (CharVal(ch)     , StringVal(s)    ) => Ok(StringVal(format!("{ch}{s}"))),
-            (StringVal(s)    , CharVal(ch)     ) => Ok(StringVal(format!("{s}{ch}"))),
-            (ListVal(list), _) => {
-                let mut list = list.to_owned();
-                list.push(rhs.to_owned());
-                Ok(ListVal(list))
-            },
-            (MapVal(map), ListVal(list)) => {
-                if list.len() != 2 {
-                    return Err(format!("Can't make a pair out of {len}-length `List`, it needs to be 2-lenght.", len = list.len()))
-                }
-                let mut map = map.to_owned();
-                let key = TryInto::try_into(list[0].to_owned()).unwrap();
-                map.insert(key, list[1].to_owned());
-                Ok(MapVal(map))
-            },
-            _ => Err(format!("Can't add `{right}` to `{left}`", right = rhs.ty(), left = self.ty()))
-
-        }
-    }
-}
-
-impl std::ops::Mul for &Value {
-    type Output = ExprResult;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (IntegerVal(int1), IntegerVal(int2)) => Ok(IntegerVal(int1 * int2)),
-            (FloatVal(float1), FloatVal(float2)) => Ok(FloatVal(float1 * float2)),
-            _ => Err(format!("Can't multiply `{left}` with `{right}`", right = rhs.ty(), left = self.ty()))
-        }
-    }
-}
-
-impl std::ops::Sub for &Value {
-    type Output = ExprResult;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (IntegerVal(int1), IntegerVal(int2)) => Ok(IntegerVal(int1 - int2)),
-            (FloatVal(float1), FloatVal(float2)) => Ok(FloatVal(float1 - float2)),
-            _ => Err(format!("Can't subtract `{right}` from `{left}`", right = rhs.ty(), left = self.ty()))
-        }
-    }
-}
-
-impl std::ops::Div for &Value {
-    type Output = ExprResult;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (IntegerVal(int1), IntegerVal(int2)) => {
-                if int2 == &0 {
-                    return Err("Attempt to divide by zero.".to_string())
-                }
-                Ok(FloatVal(*int1 as f32 / *int2 as f32))
-            },
-            (FloatVal(float1), FloatVal(float2)) => {
-                if float2 == &0. {
-                    return Err("Attempt to divide by zero.".to_string())
-                }
-                Ok(FloatVal(float1 / float2))
-            },
-            _ => Err(format!("Can't divide `{left}` with `{right}`", right = rhs.ty(), left = self.ty()))
-        }
-    }
-}
-
-impl std::ops::Rem for &Value {
-    type Output = ExprResult;
-
-    fn rem(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (IntegerVal(int1), IntegerVal(int2)) => Ok(IntegerVal(int1 % int2)),
-            _ => Err(format!("Can't mod `{left}` with `{right}`", right = rhs.ty(), left = self.ty()))
-        }
-    }
-}
-
-
-impl std::ops::BitOr for &Value {
-    type Output = ExprResult;
-
-    fn bitor(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (BoolVal(b1), BoolVal(b2)) => Ok(BoolVal(b1 | b2)),
-            _ => Err(format!("Can't Or `{right}` with `{left}`", right = rhs.ty(), left = self.ty()))
-        }
-    }
-}
-
-impl std::ops::BitAnd for &Value {
-    type Output = ExprResult;
-
-    fn bitand(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (BoolVal(b1), BoolVal(b2)) => Ok(BoolVal(b1 & b2)),
-            _ => Err(format!("Can't And `{right}` with `{left}`", right = rhs.ty(), left = self.ty()))
-        }
-    }
-}
-
-impl std::ops::Neg for &Value {
-    type Output = ExprResult;
-
-    fn neg(self) -> Self::Output {
-        match self {
-            IntegerVal(int) => Ok(IntegerVal(-int)),
-            FloatVal(float) => Ok(FloatVal(-float)),
-            _ => Err(format!("Can't negate `{operand}`.", operand = self.ty()))
-        }
-    }
-}
-
-impl std::ops::Not for &Value {
-    type Output = ExprResult;
-
-    fn not(self) -> Self::Output {
-        match self {
-            BoolVal(b) => Ok(BoolVal(!b)),
-            _ => Err(format!("Can't not `{operand}`.", operand = self.ty())),
-        }
-    }
-}
-
-impl std::cmp::PartialEq for Value {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (IntegerVal(l0), IntegerVal(r0)) => l0 == r0,
-            (FloatVal(l0)  , FloatVal(r0))   => l0 == r0,
-            (StringVal(l0) , StringVal(r0))  => l0 == r0,
-            (BoolVal(l0)   , BoolVal(r0))    => l0 == r0,
-            (ListVal(l0)   , ListVal(r0))    => l0 == r0,
-            (MapVal(l0)    , MapVal(r0))     => l0 == r0,
-            (TypeVal(l0)   , TypeVal(r0))    => l0 == r0,
-            (InstanceVal { type_name: ty1, members: mems1 }, 
-             InstanceVal { type_name: ty2, members: mems2 }) => ty1 == ty2 && mems1 == mems2,
-            (NothingVal, NothingVal) => true,
-            (FunVal {..}, FunVal {..}) => false,
-            (BuiltInFunVal {..}, BuiltInFunVal {..}) => false,
-            _ => false,
-        }
-    }
-}
-
 impl Value {
-    pub fn greater(&self, rhs: &Self) -> Result<bool, String> {
-        match (self, rhs) {
-            (IntegerVal(int1), IntegerVal(int2)) => Ok(int1   >   int2),
-            (FloatVal(float1), FloatVal(float2)) => Ok(float1 > float2),
-            _ => Err(format!("Can't check greaterness between `{left}` and `{right}`.", right = rhs.ty(), left = self.ty()))
-        }
-    }
-
-    pub fn greater_or_equal(&self, rhs: &Self) -> Result<bool, String> {
-        Ok(self.greater(rhs)? || self == rhs)
-    }
-
-    pub fn less(&self, rhs: &Self) -> Result<bool, String> {
-        match (self, rhs) {
-            (IntegerVal(int1), IntegerVal(int2)) => Ok(int1   <   int2),
-            (FloatVal(float1), FloatVal(float2)) => Ok(float1 < float2),
-            _ => Err(format!("Can't check lessness between `{left}` and `{right}`.", right = rhs.ty(), left = self.ty()))
-        }
-    }
-
-    pub fn less_or_equal(&self, rhs: &Self) -> Result<bool, String> {
-        Ok(self.less(rhs)? || self == rhs)
-    }
-
     pub fn len(&self) -> Result<usize, String> {
         match self {
             StringVal(s)  => Ok(s.chars().count()),
@@ -474,48 +298,6 @@ impl Value {
                 Ok(Box::new(iter))
             },
             _ => Err(format!("`{ty}` is not iterable.", ty = self.ty()))
-        }
-    }
-
-    pub fn index(&self, index: Value) -> ExprResult {
-        match self {
-            StringVal(s)  => {
-                let index = index.as_integer()?;
-                let index = if index < 0 {
-                    s.len() as i32 + index
-                } else {
-                    index
-                } as usize;
-                
-                match s.chars().nth(index) {
-                    Some(res) => Ok(CharVal(res)),
-                    None => Err("Index out of bounds".to_string())
-                }
-            },
-            ListVal(list) => {
-                let index = index.as_integer()?;
-                let index = if index < 0 {
-                    list.len() as i32 + index
-                } else {
-                    index
-                } as usize;
-                
-                match list.get(index) {
-                    Some(res) => Ok(res.clone()),
-                    None => Err("Index out of bounds.".to_string())
-                }
-            },
-            MapVal(map) => {
-                let key_value = match TryInto::try_into(index) {
-                    Ok(kv) => kv,
-                    Err(_) => return Err(format!("Invalid Key.").to_string()),
-                };
-                match map.get(&key_value) {
-                    Some(val) => Ok(val.clone()),
-                    None => return Err(format!("Absent Key {key_value}.")),
-                }
-            }
-            _ => unreachable!()
         }
     }
 
@@ -568,49 +350,82 @@ impl Value {
         }
     }
 
+    pub fn get_method(&self, method: &str, engine: &mut Engine) -> Result<Value, String> {
+        let name = self.ty();
+        let def = if is_builtin_type(&name) {
+            engine.resolve_from_global(&name).unwrap()
+        } else {
+            engine.resolve(&name).unwrap()
+        };
+        
+        match def {
+            DefVal { methods, .. } => {
+                if let Some(method) = methods.get(method) {
+                    return Ok(MethodVal { 
+                        value: Box::new(self.clone()), 
+                        args: method.args.clone(),
+                        body: method.body.clone()
+                    })
+                }
+            }
+            BuiltInDefVal { methods, .. } => {
+                if let Some(method) = methods.get(method) {
+                    return Ok(BuiltInMethodVal { 
+                        value: Box::new(self.clone()), 
+                        arity: method.arity, 
+                        fun: method.fun 
+                    })
+                }
+            }
+            _ => unreachable!(),
+        }
+        Err(format!("`{ty}` does not implement `{method}`.", ty = self.ty()))
+    } 
+
     // When fails, returns a tuple containing
     //      (String, Option<Error>)
     // Error string of which caused by expression itself  
     // An optionally error, if the execution of application didn't succeed 
     pub fn apply(&self, mut vals: Vec<Value>, engine: &mut Engine) -> Result<Value, (String, Option<Error>)> {
         fn handle<T>(res: Res<T>) -> Result<T, (String, Option<Error>)> {
-            res.map_err(|err| { 
-                ("Error while evaluating expression".to_string(), Some(err)) 
-            })
+            res.map_err(|err| ("Error while evaluating expression".to_string(), Some(err)))
         }
+
+        let check_arity = |expected| -> Result<(), (String, Option<Error>)> {
+            if vals.len() !=  expected {
+                Err((format!("Expected {expected} arguments but given {given}", given = vals.len()), None))
+            } else {
+                Ok(())
+            }
+        }; 
 
         match self {
             FunVal     { args, body }     |
             MethodVal  { args, body, .. } |
             ClosureVal { args, body, .. } => {
-                if vals.len() != args.len() {
-                    return Err((format!("Expected {} arguments but {} given", args.len(), vals.len()), None))
-                }
-                
+                check_arity(args.len())?;                
                 if body.is_empty() {
                     return Ok(NothingVal)
                 }
 
                 engine.enter_scope();
                 match self {
-                    ClosureVal { closure, .. } => {
+                    ClosureVal { closure, .. } => 
                         for (arg, v) in closure {
                             engine.define(arg.to_string(), v.to_owned());
-                        }
-                    },
-                    MethodVal { value, .. } => {
-                        engine.define(String::from("self"), *value.to_owned());
-                    }
+                        },
+                    
+                    MethodVal { value, .. } => engine.define(String::from("self"), *value.to_owned()),
                     _ => (),
                 }
-                handle(engine.collect_definition(body))?;
+                
+                handle(engine.collect_definitions(body))?;
                 for (arg, v) in std::iter::zip(args, vals) {
                     engine.define(arg.to_string(), v);
                 }
                 
                 for stmt in &body[..body.len() - 1] {
-                    let state = handle(engine.run(stmt))?;
-                    if let State::Return(val) = state {
+                    if let State::Return(val) = handle(engine.run(stmt))? {
                         engine.exit_scope();
                         return Ok(val)
                     }
@@ -629,48 +444,42 @@ impl Value {
                 
                 Ok(rv)
             },
-            BuiltInFunVal { arity, fun } => {
-                if vals.len() != *arity {
-                    return Err((format!("Expected {} arguments but {} given.", arity, vals.len()), None))
+            
+            BuiltInFunVal    { arity, fun }     |
+            BuiltInMethodVal { arity, fun, .. } => {
+                check_arity(*arity)?;
+                if let BuiltInMethodVal { value, .. } = self {
+                    vals.push(*value.clone());
                 }
                 fun(vals, engine)
             }
-            BuiltInMethodVal { value, arity, fun } => {
-                if vals.len() != *arity {
-                    return Err((format!("Expected {} arguments but {} given.", arity, vals.len()), None))
-                }
-                vals.push(*value.clone());
-                fun(vals, engine)
-            }
+                
             DefVal        { name, members, .. } |
             BuiltInDefVal { name, members, .. } => {
-                if vals.len() != members.len() {
-                    return Err((format!("Expected {} arguments but {} given.", members.len(), vals.len()), None))
-                }
+                check_arity(members.len())?;
                 let mut map = HashMap::new(); 
                 for (mem, v) in std::iter::zip(members, vals) {
                     map.insert(mem.to_string(), v);
                 }
                 Ok(InstanceVal { type_name: name.to_owned(), members: map })
             }
-            TypeVal(ty) => {
-                match ty {
-                    CustomTy(name) => {
-                        let (DefVal       { members, .. } | 
-                            BuiltInDefVal { members, .. }) = engine.resolve(name).unwrap() else {
-                            unreachable!()
-                        };
-                        if vals.len() != members.len() {
-                            return Err((format!("Expected {} arguments but {} given.", members.len(), vals.len()), None))
-                        }
-                        let mut map = HashMap::new(); 
-                        for (mem, v) in std::iter::zip(members, vals) {
-                            map.insert(mem.to_string(), v);
-                        }
-                        Ok(InstanceVal { type_name: name.to_owned(), members: map })
-                    },
-                    _ => Err((format!("`{ty}` is not applicable.", ty = self.ty()), None)) 
+            
+            TypeVal(name) => {
+                let def = if is_builtin_type(&name) {
+                    engine.resolve_from_global(&name).unwrap()
+                } else {
+                    engine.resolve(&name).unwrap()
+                };
+                let (DefVal       { members, .. }| 
+                    BuiltInDefVal { members, .. }) = def else {
+                    unreachable!()
+                };
+                check_arity(members.len())?;
+                let mut map = HashMap::new(); 
+                for (mem, v) in std::iter::zip(members, vals) {
+                    map.insert(mem.to_string(), v);
                 }
+                Ok(InstanceVal { type_name: name.to_owned(), members: map })
             },
             _ => Err((format!("`{ty}` is not applicable.", ty = self.ty()), None))
         }

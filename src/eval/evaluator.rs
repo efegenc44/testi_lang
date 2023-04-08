@@ -14,41 +14,37 @@ use crate::{
 };
 
 use super::{
-    value::{
-        Value::{ self, * },
-        ExprResult
-    },
+    value::Value::{ self, * },
     std::get_global,
 };
 
 impl BinaryOp {
-    fn eval(&self, left: &Value, right: &Value) -> ExprResult {
+    fn get_method_name(&self) -> String {
         match self {
-            BinaryOp::Add => left + right,
-            BinaryOp::Sub => left - right,
-            BinaryOp::Mul => left * right,
-            BinaryOp::Div => left / right,
-            BinaryOp::Mod => left % right,
-            BinaryOp::Eq  => Ok(BoolVal(left == right)),
-            BinaryOp::Ne  => Ok(BoolVal(left != right)),
-            BinaryOp::Lt  => left.less(right).map(BoolVal),
-            BinaryOp::Gt  => left.greater(right).map(BoolVal),
-            BinaryOp::Le  => left.less_or_equal(right).map(BoolVal),
-            BinaryOp::Ge  => left.greater_or_equal(right).map(BoolVal),
-            BinaryOp::And => left & right,
-            BinaryOp::Or  => left | right,
-            BinaryOp::Is  => Ok(BoolVal(left.ty() == right.as_type()?)),                
-            BinaryOp::Xrn => Ok(RangeVal(left.as_integer()?, right.as_integer()?)),
-            BinaryOp::Irn => Ok(RangeVal(left.as_integer()?, right.as_integer()?+1))   
+            BinaryOp::Add => String::from("add"),
+            BinaryOp::Sub => String::from("sub"),
+            BinaryOp::Mul => String::from("mul"),
+            BinaryOp::Div => String::from("div"),
+            BinaryOp::Mod => String::from("mod"),
+            BinaryOp::Eq  => String::from("eq"),
+            BinaryOp::Ne  => String::from("ne"),
+            BinaryOp::Gt  => String::from("gt"),
+            BinaryOp::Ge  => String::from("ge"),
+            BinaryOp::Lt  => String::from("lt"),
+            BinaryOp::Le  => String::from("le"),
+            BinaryOp::And => String::from("and"),
+            BinaryOp::Or  => String::from("or"),
+            BinaryOp::Xrn => String::from("xrn"),
+            BinaryOp::Irn => String::from("irn"),
         }
     }
 }
 
 impl UnaryOp {
-    fn eval(&self, operand: &Value) -> ExprResult {
+    fn get_method_name(&self) -> String {
         match self {
-            UnaryOp::Neg => -operand,
-            UnaryOp::Not => !operand,
+            UnaryOp::Neg => String::from("neg"),
+            UnaryOp::Not => String::from("not"),
         }
     }
 }
@@ -62,7 +58,7 @@ pub enum State {
 
 type Context = HashMap<String, Value>;
 pub struct Engine {
-    ctx: Vec<Context>,
+    ctx: Vec<Context>   
 }
 
 impl Engine {
@@ -83,9 +79,7 @@ impl Engine {
     }
 
     fn redefine(&mut self, var: &String, val: Value) -> Result<(), String> {
-        let len = self.ctx.len();
-        for index in 0..len {
-            let scope = &mut self.ctx[(len-1) - index];
+        for scope in self.ctx.iter_mut().rev() {
             match scope.get_mut(var) {
                 Some(v) => return Ok(*v = val.clone()),
                 None    => continue,
@@ -95,9 +89,7 @@ impl Engine {
     }
 
     pub fn resolve(&self, var: &String) -> Result<Value, String> {
-        let len = self.ctx.len();
-        for index in 0..len {
-            let scope = &self.ctx[(len-1) - index];
+        for scope in self.ctx.iter().rev() {
             match scope.get(var) {
                 Some(val) => return Ok(val.clone()),
                 None      => continue,
@@ -106,12 +98,27 @@ impl Engine {
         Err(format!("Undefined symbol `{var}`."))
     }
     
-    pub fn collect_definition(&mut self, stmts: &Vec<Spanned<Stmt>>) -> Res<()> {
+    pub fn resolve_from_global(&self, var: &str) -> Result<Value, String> {
+        match self.ctx.first().unwrap().get(var) {
+            Some(val) => Ok(val.clone()),
+            None      => Err(format!("Undefined symbol `{var}`."))
+        }
+    }
+
+    pub fn collect_definitions(&mut self, stmts: &Vec<Spanned<Stmt>>) -> Res<()> {
         for stmt in stmts {
-            if let FunStmt { name, args, body } = &stmt.data {
-                self.define(name.to_string(), FunVal {
-                    args: args.to_vec(), body: body.to_vec()
-                });
+            match &stmt.data {
+                FunStmt { name, args, body } =>
+                    self.define(name.to_string(), FunVal {
+                        args: args.to_vec(), body: body.to_vec()
+                    }),
+                
+                DefStmt { name, mems, mets } =>
+                    self.define(name.to_string(), DefVal { 
+                        name: name.to_string(), members: mems.to_owned(), methods: mets.to_owned() 
+                    }),
+                
+                _ => (),
             }
         }
         Ok(())
@@ -119,30 +126,33 @@ impl Engine {
 
     fn run_block(&mut self, stmts: &Vec<Spanned<Stmt>>) -> Res<State> {
         self.enter_scope();
-        self.collect_definition(stmts)?;
+        self.collect_definitions(stmts)?;
         for stmt in stmts {
-            let res = self.run(stmt)?;
-            let State::Ok = res else {
-                self.exit_scope();
-                return Ok(res)
-            };
+            match self.run(stmt)? {
+                State::Ok => (),
+                res => {
+                    self.exit_scope();
+                    return Ok(res)
+                }
+            }
         }
         self.exit_scope();
-        return Ok(State::Ok)
+        Ok(State::Ok)
     }
 
     fn assign(&mut self, assignee: &Spanned<Expr>, val: Value) -> Res<Value> {
         match &assignee.data {
             Variable(var) => match self.redefine(&var, val.clone()) {
-                Ok(())   => Ok(val.clone()),
+                Ok(())   => Ok(val),
                 Err(err) => simple_error(err, assignee.span),
             },
-            IndexExpr { from, index_expr } => {
+            
+            IndexExpr { from, index_expr } =>
                 handle(handle(self.eval(from)?.indexable(), from.span)?
-                    .replace(self.eval(index_expr)?, val), index_expr.span)
-            },
+                    .replace(self.eval(index_expr)?, val), index_expr.span),
+
             AccessExpr { from, member } => {
-                let (type_name, mut members) = handle(self.eval(from)?.as_instance(), from.span)?;
+                let (type_name, mut members) = handle(self.eval(from)?.as_instance(), from.span)?;                
                 match members.insert(member.clone(), val) {
                     Some(_) => Ok(InstanceVal { type_name, members }),
                     None    => simple_error(format!("`{type_name}` has no member called `{member}`"), from.span),
@@ -154,30 +164,27 @@ impl Engine {
     
     pub fn run(&mut self, stmt: &Spanned<Stmt>) -> Res<State> {
         match &stmt.data { 
-            DefStmt { name, mems, mets } => {
-                self.define(name.to_owned(), DefVal { 
-                    name: name.to_owned(), 
-                    members: mems.to_owned(), 
-                    methods: mets.to_owned(), 
-                });
-            },
+            //   Ignore Functions and Definitions at `run` because we
+            // already defined them at `collect_definitions`
+            DefStmt {..} => (),
+            FunStmt {..} => (),
+            
             LetStmt { var, expr } => {
                 let value = self.eval(expr)?;
                 self.define(var.to_string(), value);
             },
-            //   Ignore Function Definitions at `run` because we
-            // already defined them at `collect_definitions`
-            FunStmt {..}  => (),
+            
             ClosureStmt { name, args, body, closure } => {
-                let mut closure_map = HashMap::new();
+                let mut closure_map = HashMap::with_capacity(closure.len());
                 for var in closure {
-                    closure_map.insert(var.to_string(), self.resolve(var).unwrap());
+                    closure_map.insert(var.to_string(), handle(self.resolve(var), stmt.span)?);
                 }
                 
                 self.define(name.to_string(), ClosureVal {
                     args: args.to_vec(), body: body.to_vec(), closure: closure_map
                 });
             },
+            
             IfStmt { branches, elss } => {
                 for (cond, branch) in branches {
                     if handle(self.eval(cond)?.as_bool(), cond.span)? {
@@ -188,43 +195,41 @@ impl Engine {
                     return self.run_block(branch)
                 } 
             },
-            WhileStmt { cond, body } => {
-                loop {
-                    if handle(self.eval(cond)?.as_bool(), cond.span)? {
-                        break;
+            
+            WhileStmt { cond, body } =>
+                while handle(self.eval(cond)?.as_bool(), cond.span)? {
+                    match self.run_block(body)? {
+                        res @ State::Return(_) => return Ok(res),
+                        State::Continue => continue,
+                        State::Break => break,
+                        State::Ok => (),
                     }
-                    let res = self.run_block(body)?;
-                    match res {
-                        State::Return(_) => return Ok(res),
-                        State::Continue  => continue,
-                        State::Break     => break,
-                        State::Ok        => (),
-                    }
-                }
-            },
+                },
+            
             ForStmt { var, iter, body } => {
                 for i in handle(self.eval(iter)?.iter(), iter.span)? {
                     self.enter_scope();
-                    self.collect_definition(body)?;
+                    self.collect_definitions(body)?;
                     self.define(var.to_string(), i);
                     for stmt in body {
-                        let res = self.run(stmt)?;
-                        match res {
-                            State::Return(_) => {
+                        match self.run(stmt)? {
+                            res @ State::Return(_) => {
                                 self.exit_scope();
                                 return Ok(res)
                             },
-                            State::Continue  => continue,
-                            State::Break     => break,
-                            State::Ok        => (),
+                            State::Continue => continue,
+                            State::Break => break,
+                            State::Ok => (),
                         }
                     }
                     self.exit_scope();
                 }
             },
-            ExprStmt(e)   => {
+            
+            ExprStmt(e) => {
                 self.eval(e)?;
             }
+            
             ReturnStmt(e) => return Ok(State::Return(self.eval(e)?)),
             ContinueStmt  => return Ok(State::Continue),
             BreakStmt     => return Ok(State::Break),
@@ -235,98 +240,93 @@ impl Engine {
     pub fn eval(&mut self, expr: &Spanned<Expr>) -> Res<Value> {
         match &expr.data {
             AssignmentExpr { op, assignee, expr: e } => {
-                let val = self.eval(e)?;
-                let aval = self.eval(assignee)?;
-                let val = handle(match op {
-                    AssignOp::Normal => Ok(val),
-                    AssignOp::Add    => BinaryOp::Add.eval(&aval, &val),
-                    AssignOp::Sub    => BinaryOp::Sub.eval(&aval, &val),
-                    AssignOp::Mul    => BinaryOp::Mul.eval(&aval, &val),
-                    AssignOp::Div    => BinaryOp::Div.eval(&aval, &val),
-                }, expr.span)?;
-                self.assign(assignee, val.clone())
+                let val = match op {
+                    AssignOp::Normal => self.eval(e)?,
+                    AssignOp::Composite(bop) => 
+                        handle(self.eval(assignee)?.get_method(&bop.get_method_name(), self), expr.span)?
+                            .apply(vec![self.eval(&e)?], self)
+                            .map_err(|(err, inner_err)| Error::new(err, expr.span, inner_err))?
+                };
+                self.assign(assignee, val)
             },
-            BinaryExpr { op, left, right } => handle(op.eval(&self.eval(left)?, &self.eval(right)?), expr.span),
-            UnaryExpr  { op, operand }     => handle(op.eval(&self.eval(operand)?), expr.span),
+            
+            BinaryExpr { op, left, right } => 
+                handle(self.eval(&left)?.get_method(&op.get_method_name(), self), expr.span)?
+                    .apply(vec![self.eval(&right)?], self)
+                    .map_err(|(err, inner_err)| Error::new(err, expr.span, inner_err)),
+            
+            UnaryExpr { op, operand } => 
+                handle(self.eval(&operand)?.get_method(&op.get_method_name(), self), expr.span)?
+                    .apply(vec![], self)
+                    .map_err(|(err, inner_err)| Error::new(err, expr.span, inner_err)),
+            
             ApplicationExpr { applied, exprs } => {
-                let mut values = vec![];
-                for expr in exprs {
-                    values.push(self.eval(expr)?)
-                }
-                self.eval(applied)?.apply(values, self).map_err(|(err, inner_err)| {
-                    Error::new(err, expr.span, inner_err) 
-                })
+                let values: Result<_, _> = exprs
+                    .iter()
+                    .map(|expr| self.eval(expr))
+                    .collect(); 
+
+                self.eval(applied)?
+                    .apply(values?, self)
+                    .map_err(|(err, inner_err)| Error::new(err, expr.span, inner_err))
             },
-            IndexExpr { from, index_expr } => {
-                handle(handle(self.eval(from)?.indexable(), from.span)?
-                    .index(self.eval(index_expr)?), index_expr.span)
-            },
+            
+            IndexExpr { from, index_expr } =>
+                handle(self.eval(from)?.get_method("index", self), from.span)?
+                    .apply(vec![self.eval(index_expr)?], self)
+                    .map_err(|(err, inner_err)| Error::new(err, expr.span, inner_err)),
+           
             AccessExpr { from, member } => {
                 let value = self.eval(from)?;
-                match value {
-                    InstanceVal {..} => {
-                        let (_, members) = handle(value.as_instance(), from.span)?;
-                        match members.get(member) {
-                            Some(val) => return Ok(val.clone()),
-                            None      => (),
-                        }
+                if let InstanceVal { members, .. } = &value {
+                    if let Some(val) = members.get(member) {
+                        return Ok(val.clone())
                     }
-                    _ => ()
                 }
-                let ty = value.ty();
-                if let DefVal { methods, .. } = self.resolve(&ty.to_string()).unwrap() {
-                    return match methods.get(member) {
-                        Some(met) => Ok(MethodVal {
-                            value: Box::new(value), 
-                            args: met.args.clone(), 
-                            body: met.body.clone() 
-                        }),
-                        None => simple_error(format!("`{ty}` has no member, nor method called `{member}`"), from.span),
-                    }
-                };
-                if let BuiltInDefVal { methods, .. } = self.resolve(&ty.to_string()).unwrap() {
-                    return match methods.get(member) {
-                        Some(met) => Ok(BuiltInMethodVal {
-                            value: Box::new(value),
-                            arity: met.arity,
-                            fun: met.fun,
-                        }),
-                        None => simple_error(format!("`{ty}` has no member, nor method called `{member}`"), from.span),
-                    }
-                };
-                simple_error(format!("`{ty}` has no member, nor method called `{member}`"), from.span)
+                match value.get_method(&member, self) {
+                    Ok(met) => Ok(met),
+                    Err(_)  => simple_error(format!("`{ty}` has no member, nor method called `{member}`", ty = value.ty()), from.span),
+                }
             },
-            FunctionExpr { args, body, closure } => Ok(if let Some(closure) = closure {
-                let mut closure_map = HashMap::new();
-                for var in closure {
-                    closure_map.insert(var.to_string(), self.resolve(var).unwrap());
+            
+            FunctionExpr { args, body, closure } => Ok(
+                if let Some(closure) = closure {
+                    let mut closure_map = HashMap::with_capacity(closure.len());
+                    for var in closure {
+                        closure_map.insert(var.to_string(), handle(self.resolve(var), expr.span)?);
+                    }
+                    ClosureVal { args: args.to_owned(), body: body.to_owned(), closure: closure_map }
+                } else {
+                    FunVal { args: args.to_owned(), body: body.to_owned() }
                 }
-
-                ClosureVal { args: args.to_owned(), body: body.to_owned(), closure: closure_map }
-            } else {
-                FunVal { args: args.to_owned(), body: body.to_owned() }
-            }),
-            ListExpr(exprs)  => {
-                let mut list = vec![]; 
-                for expr in exprs {
-                    list.push(self.eval(expr)?);
-                }
-                Ok(ListVal(list))
+            ),
+            
+            TypeTestExpr { expr: e, ty } => 
+                Ok(BoolVal(self.eval(e)?.ty() == handle(self.eval(ty)?.as_type(), ty.span)?)),
+            
+            ListExpr(exprs) => {
+                let list: Result<_, _> = exprs
+                    .iter()
+                    .map(|e| self.eval(e))
+                    .collect();
+                Ok(ListVal(list?))
             },
-            MapExpr(pairs)   => {
-                let mut map = HashMap::new();
+            
+            MapExpr(pairs) => {
+                let mut map = HashMap::with_capacity(pairs.len());
                 for (key, value) in pairs {
                     map.insert(handle(self.eval(key)?.try_into(), key.span)?, self.eval(value)?);
-                } 
+                }
                 Ok(MapVal(map))
             },
+            
             NaturalExpr(nat) => Ok(IntegerVal(*nat as i32)),
             FloatExpr(float) => Ok(FloatVal(*float)),
-            StringExpr(s)    => Ok(StringVal(s.to_string())),
-            CharExpr(ch)     => Ok(CharVal(*ch)),
-            BoolExpr(b)      => Ok(BoolVal(*b)),
-            NothingExpr      => Ok(NothingVal),
-            Variable(var)    => Ok(handle(self.resolve(var), expr.span)?),
+            StringExpr(s) => Ok(StringVal(s.to_string())),
+            CharExpr(ch) => Ok(CharVal(*ch)),
+            BoolExpr(b) => Ok(BoolVal(*b)),
+            NothingExpr => Ok(NothingVal),
+            Variable(var) => Ok(handle(self.resolve(var), expr.span)?),
         }
     }
 }

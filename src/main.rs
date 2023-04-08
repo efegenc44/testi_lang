@@ -34,7 +34,7 @@ fn run_from_file(path: &String) -> io::Result<()> {
     };
 
     let mut engine = Engine::new();
-    match engine.collect_definition(&stmts) {
+    match engine.collect_definitions(&stmts) {
         Ok(_)    => (),
         Err(err) => {
             reporter.report(err, "runtime");
