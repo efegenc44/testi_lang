@@ -1,57 +1,21 @@
 use std::collections::HashMap;
 
-use super::value::{ Value::{ self, * }, BuiltInFunction };
+use super::{value::{ Value::{ self, * }, BuiltInFunction }, r#type::*};
 
 pub fn get_global() -> HashMap<String, Value> {
-    let global = HashMap::from([
-        ("Integer".to_string(), BuiltInDefVal { 
-            name: String::from("Integer"),
-            members: vec![], 
-            methods: HashMap::from([
-                (String::from("times"), BuiltInFunction { arity: 2, fun: |values, engine| {
-                    let v = values.last().unwrap().as_integer().unwrap();
-                    let ListVal(list) = &values[1] else {
-                        return Err((format!("Expected `List` as second argument, not `{ty}`", ty = values[1].ty()), None));
-                    };
-                    for _ in 0..v {
-                        values[0].apply(list.clone(), engine)?;
-                    }
-                    Ok(NothingVal)
-                }}),
-                (String::from("add"), BuiltInFunction { arity: 1, fun: |values, _| {
-                    let left  = values.last().unwrap().as_integer().unwrap();                    
-                    let right = values[0].as_integer().map_err(|err| (err, None))?;
-                    Ok(IntegerVal(left + right))
-                }}),
-                (String::from("neg"), BuiltInFunction { arity: 0, fun: |values, _| {
-                    let v = values.last().unwrap().as_integer().unwrap();                    
-                    Ok(IntegerVal(-v))
-                }})
-            ]) 
-        }),
-
-        ("String".to_string(), BuiltInDefVal { 
-            name: String::from("String"),
-            members: vec![], 
-            methods: HashMap::from([
-                (String::from("parse_integer"), BuiltInFunction { arity: 0, fun: |values, _| {
-                    let v = values.last().unwrap().as_string().unwrap();
-                    match v.parse() {
-                        Ok(int) => Ok(IntegerVal(int)),
-                        Err(_)  => Err((format!("Couldn't convert to `Integer`"), None))
-                    }
-                }})
-            ]) 
-        }),
-        
-        ("Float".to_string()    , TypeVal("Float".into())),
-        ("Character".to_string(), TypeVal("Character".into())),
-        ("Bool".to_string()     , TypeVal("Bool".into())),
-        ("Function".to_string() , TypeVal("Function".into())),
-        ("List".to_string()     , TypeVal("List".into())),
-        ("Map".to_string()      , TypeVal("Map".into())),
-        ("Nothing".to_string()  , TypeVal("Nothing".into())),
-        ("Type".to_string()     , TypeVal("Type".into())),
+    let global = HashMap::from([        
+        ("Integer".to_string(), TypeVal(INTEGER_TYPE_ID)),
+        ("Bool".to_string(), TypeVal(BOOL_TYPE_ID)),
+        ("String".to_string(), TypeVal(STRING_TYPE_ID)),
+        ("Float".to_string(), TypeVal(FLOAT_TYPE_ID)),
+        ("Range".to_string(), TypeVal(RANGE_TYPE_ID)),
+        ("Character".to_string(), TypeVal(CHARACTER_TYPE_ID)),
+        ("Method".to_string(), TypeVal(METHOD_TYPE_ID)),
+        ("Function".to_string() , TypeVal(FUNCTION_TYPE_ID)),
+        ("List".to_string(), TypeVal(LIST_TYPE_ID)),
+        ("Map".to_string(), TypeVal(MAP_TYPE_ID)),
+        ("Nothing".to_string(), TypeVal(NOTHING_TYPE_ID)),
+        ("Type".to_string(), TypeVal(TYPE_TYPE_ID)),
         ("print".to_string(), BuiltInFunVal {
             arity: 1, fun: |vals, _| {
                 println!("{}", vals[0]);
@@ -110,4 +74,73 @@ pub fn get_global() -> HashMap<String, Value> {
     ]);
 
     global
+}
+
+pub fn integer_type() -> Type {
+    Type::BuiltInDef { 
+        members: vec![], 
+        methods: HashMap::from([
+            (String::from("times"), BuiltInFunction { arity: 2, fun: |values, engine| {
+                let v = values.last().unwrap().as_integer().unwrap();
+                let ListVal(list) = &values[1] else {
+                    return Err((format!("Expected `List` as second argument, not `{ty}`", ty = values[1].ty()), None));
+                };
+                for _ in 0..v {
+                    values[0].apply(list.clone(), engine)?;
+                }
+                Ok(NothingVal)
+            }}),
+            (String::from("add"), BuiltInFunction { arity: 1, fun: |values, _| {
+                let left  = values.last().unwrap().as_integer().unwrap();                    
+                let right = values[0].as_integer().map_err(|err| (err, None))?;
+                Ok(IntegerVal(left + right))
+            }}),
+            (String::from("neg"), BuiltInFunction { arity: 0, fun: |values, _| {
+                let v = values.last().unwrap().as_integer().unwrap();                    
+                Ok(IntegerVal(-v))
+            }}),
+            (String::from("eq"), BuiltInFunction { arity: 1, fun: |values, _| {
+                let left  = values.last().unwrap().as_integer().unwrap();                    
+                let right = values[0].as_integer().map_err(|err| (err, None))?;
+                Ok(BoolVal(left == right))
+            }})
+        ]) 
+    }
+}
+
+pub fn string_type() -> Type {
+    Type::BuiltInDef { 
+        members: vec![], 
+        methods: HashMap::from([
+            (String::from("parse_integer"), BuiltInFunction { arity: 0, fun: |values, _| {
+                let v = values.last().unwrap().as_string().unwrap();
+                match v.parse() {
+                    Ok(int) => Ok(IntegerVal(int)),
+                    Err(_)  => Err((format!("Couldn't convert to `Integer`"), None))
+                }
+            }})
+        ]) 
+    }
+}
+
+pub fn bool_type() -> Type {
+    Type::BuiltInDef { 
+        members: vec![], 
+        methods: HashMap::from([
+            (String::from("and"), BuiltInFunction { arity: 1, fun: |values, _| {
+                let left  = values.last().unwrap().as_bool().unwrap();                    
+                let right = values[0].as_bool().map_err(|err| (err, None))?;
+                Ok(BoolVal(left && right))
+            }}),
+            (String::from("not"), BuiltInFunction { arity: 0, fun: |values, _| {
+                let v = values.last().unwrap().as_bool().unwrap();                    
+                Ok(BoolVal(!v))
+            }}),
+            (String::from("eq"), BuiltInFunction { arity: 1, fun: |values, _| {
+                let left  = values.last().unwrap().as_bool().unwrap();                    
+                let right = values[0].as_bool().map_err(|err| (err, None))?;
+                Ok(BoolVal(left == right))
+            }})
+        ])
+    }
 }

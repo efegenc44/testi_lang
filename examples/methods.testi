@@ -1,3 +1,7 @@
+impl ne(other)
+    !self.eq(other)
+end
+
 def Vector2
     x y
 impl
@@ -9,6 +13,11 @@ impl
     fun neg()
         Vector2(-self.x, -self.y)
     end
+
+    fun eq(other)
+        self.x == other.x and 
+        self.y == other.y
+    end
 end
 
 def Vector3
@@ -19,5 +28,6 @@ let v = Vector2(3, 4)
 v += Vector3(4, 5, 6)
 print(v)
 print(-v)
+print(!(v == v) == (v != v))
 
 10.times(print, ["Hi!"])

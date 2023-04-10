@@ -11,6 +11,11 @@ pub enum Stmt {
         mems: Vec<String>,
         mets: HashMap<String, Function> 
     },
+    ImplStmt {
+        name: String,
+        args: Vec<String>,
+        body: Vec<Spanned<Stmt>>
+    },
     LetStmt {
         var: String,
         expr: Spanned<Expr>,

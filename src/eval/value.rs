@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use Value::*;
 
@@ -7,7 +7,10 @@ use crate::{
     span::Spanned, error::error::{ Error, Res }
 };
 
-use super::evaluator::{ Engine, State };
+use super::{
+    evaluator::{ Engine, State }, 
+    r#type::*
+};
 
 #[derive(Clone, PartialEq, Hash, Eq)]
 pub enum KeyValue {
@@ -70,7 +73,7 @@ pub enum Value {
     MapVal(HashMap<KeyValue, Value>),
     RangeVal(i32, i32),
     InstanceVal {
-        type_name: String, 
+        type_id: usize, 
         members: HashMap<String, Value>,
     },
     MethodVal {
@@ -97,17 +100,7 @@ pub enum Value {
         fun: fn(vals: Vec<Value>, engine: &mut Engine) -> Result<Value, (String, Option<Error>)>
     },
     NothingVal,
-    TypeVal(String),
-    DefVal {
-        name: String,
-        members: Vec<String>,
-        methods: HashMap<String, Function>,
-    },
-    BuiltInDefVal {
-        name: String,
-        members: Vec<String>,
-        methods: HashMap<String, BuiltInFunction>,
-    },
+    TypeVal(usize),
 }
 
 impl std::fmt::Display for Value {
@@ -147,8 +140,8 @@ impl std::fmt::Display for Value {
                 write!(f, "]")?;
                 Ok(())
             },
-            InstanceVal { type_name, members } => {
-                write!(f, "{type_name} ")?;
+            InstanceVal { type_id, members } => {
+                write!(f, "{type_id} ")?;
                 let mut first = true;
                 for (key, value) in members {
                     if first {
@@ -160,16 +153,14 @@ impl std::fmt::Display for Value {
                 }
                 Ok(())
             },
-            RangeVal(bot, up)          => write!(f, "{bot}..{up}"),
-            MethodVal {..}             => write!(f, "<method>"),
-            FunVal {..}                => write!(f, "<function>"),
-            ClosureVal {..}            => write!(f, "<function>"),
-            BuiltInFunVal {..}         => write!(f, "<built-in function>"),
-            BuiltInMethodVal {..}      => write!(f, "<built-in method>"),
-            NothingVal                 => write!(f, "nothing"),
-            TypeVal(ty)                => write!(f, "{ty}"),
-            DefVal { name, .. }        => write!(f, "{name}"),
-            BuiltInDefVal { name, .. } => write!(f, "{name}"),
+            RangeVal(bot, up)     => write!(f, "{bot}..{up}"),
+            MethodVal {..}        => write!(f, "<method>"),
+            FunVal {..}           => write!(f, "<function>"),
+            ClosureVal {..}       => write!(f, "<function>"),
+            BuiltInFunVal {..}    => write!(f, "<built-in function>"),
+            BuiltInMethodVal {..} => write!(f, "<built-in method>"),
+            NothingVal            => write!(f, "nothing"),
+            TypeVal(ty)           => write!(f, "{ty}"),
         }
     }
 }
@@ -180,35 +171,29 @@ impl std::fmt::Debug for Value {
     }
 }
 
-pub fn is_builtin_type(ty: &str) -> bool {
-    HashSet::from(["Integer", "Float", "String", "Character", 
-                   "Bool", "List", "Map", "Range", "Method", 
-                   "Function", "Nothing", "Type"]).contains(ty)
-}
-
 impl Value {
-    pub fn ty(&self) -> String {
+    pub fn ty(&self) -> usize {
         match self {
-            IntegerVal(_)         => "Integer",
-            FloatVal(_)           => "Float",
-            StringVal(_)          => "String",
-            CharVal(_)            => "Character",
-            BoolVal(_)            => "Bool",
-            ListVal(_)            => "List",
-            MapVal(_)             => "Map",
-            RangeVal(_, _)        => "Range",
-            MethodVal {..}        => "Method",
-            BuiltInMethodVal {..} => "Method",
-            FunVal {..}           => "Function",
-            ClosureVal {..}       => "Function",
-            BuiltInFunVal {..}    => "Function",
-            NothingVal            => "Nothing",
-            TypeVal(_)            => "Type",
-            DefVal {..}           => "Type",
-            BuiltInDefVal {..}    => "Type",
+            IntegerVal(_)         => INTEGER_TYPE_ID,
+            FloatVal(_)           => FLOAT_TYPE_ID,
+            StringVal(_)          => STRING_TYPE_ID,
+            BoolVal(_)            => BOOL_TYPE_ID,
+            ListVal(_)            => LIST_TYPE_ID,
+            MapVal(_)             => MAP_TYPE_ID,
+            RangeVal(_, _)        => RANGE_TYPE_ID,
+            MethodVal {..}        |
+            BuiltInMethodVal {..} => METHOD_TYPE_ID,
+            FunVal {..}           |
+            ClosureVal {..}       |
+            BuiltInFunVal {..}    => FUNCTION_TYPE_ID,
+            NothingVal            => NOTHING_TYPE_ID,
+            TypeVal(_)            => TYPE_TYPE_ID,
             
-            InstanceVal { type_name, .. } => type_name,
-        }.into()
+            InstanceVal { type_id, .. } => *type_id,
+            
+            CharVal(_)            => CHARACTER_TYPE_ID,
+            
+        }
     }
 
     pub fn as_integer(&self) -> Result<i32, String> {
@@ -239,18 +224,16 @@ impl Value {
         }
     }
 
-    pub fn as_type(&self) -> Result<String, String> {
+    pub fn as_type(&self) -> Result<usize, String> {
         match self {
-            TypeVal(ty)                 => Ok(ty.clone()),
-            DefVal { name, .. }         => Ok(name.clone()),
-            BuiltInDefVal { name, .. }  => Ok(name.clone()),
+            TypeVal(id) => Ok(*id),
             _ => Err(format!("Expected Type, got {}.", self.ty()))
         }
     }
 
-    pub fn as_instance(&self) -> Result<(String, HashMap<String, Value>), String> {
+    pub fn as_instance(&self) -> Result<(usize, HashMap<String, Value>), String> {
         match self {
-            InstanceVal { type_name, members } => Ok((type_name.clone(), members.clone())),
+            InstanceVal { type_id, members } => Ok((*type_id, members.clone())),
             _ => Err(format!("Expected a `Definition`, got {}.", self.ty()))
         }
     }
@@ -351,15 +334,8 @@ impl Value {
     }
 
     pub fn get_method(&self, method: &str, engine: &mut Engine) -> Result<Value, String> {
-        let name = self.ty();
-        let def = if is_builtin_type(&name) {
-            engine.resolve_from_global(&name).unwrap()
-        } else {
-            engine.resolve(&name).unwrap()
-        };
-        
-        match def {
-            DefVal { methods, .. } => {
+        match engine.get_type(self.ty()) {
+            Type::Def { methods, .. } => {
                 if let Some(method) = methods.get(method) {
                     return Ok(MethodVal { 
                         value: Box::new(self.clone()), 
@@ -368,7 +344,7 @@ impl Value {
                     })
                 }
             }
-            BuiltInDefVal { methods, .. } => {
+            Type::BuiltInDef { methods, .. } => {
                 if let Some(method) = methods.get(method) {
                     return Ok(BuiltInMethodVal { 
                         value: Box::new(self.clone()), 
@@ -377,9 +353,17 @@ impl Value {
                     })
                 }
             }
-            _ => unreachable!(),
         }
-        Err(format!("`{ty}` does not implement `{method}`.", ty = self.ty()))
+
+        let Some(Function { args, body, .. }) = engine.get_impl(method) else {
+            return Err(format!("`{ty}` does not implement `{method}`.", ty = self.ty()))
+        };
+
+        Ok(MethodVal { 
+            value: Box::new(self.clone()), 
+            args, 
+            body 
+        })
     } 
 
     // When fails, returns a tuple containing
@@ -454,32 +438,15 @@ impl Value {
                 fun(vals, engine)
             }
                 
-            DefVal        { name, members, .. } |
-            BuiltInDefVal { name, members, .. } => {
+            TypeVal(id) => {
+                let (Type::Def       { members, .. }| 
+                    Type::BuiltInDef { members, .. }) = engine.get_type(*id);
                 check_arity(members.len())?;
                 let mut map = HashMap::new(); 
                 for (mem, v) in std::iter::zip(members, vals) {
                     map.insert(mem.to_string(), v);
                 }
-                Ok(InstanceVal { type_name: name.to_owned(), members: map })
-            }
-            
-            TypeVal(name) => {
-                let def = if is_builtin_type(&name) {
-                    engine.resolve_from_global(&name).unwrap()
-                } else {
-                    engine.resolve(&name).unwrap()
-                };
-                let (DefVal       { members, .. }| 
-                    BuiltInDefVal { members, .. }) = def else {
-                    unreachable!()
-                };
-                check_arity(members.len())?;
-                let mut map = HashMap::new(); 
-                for (mem, v) in std::iter::zip(members, vals) {
-                    map.insert(mem.to_string(), v);
-                }
-                Ok(InstanceVal { type_name: name.to_owned(), members: map })
+                Ok(InstanceVal { type_id: *id, members: map })
             },
             _ => Err((format!("`{ty}` is not applicable.", ty = self.ty()), None))
         }

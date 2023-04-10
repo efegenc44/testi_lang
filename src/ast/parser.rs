@@ -181,7 +181,7 @@ impl Parser {
                     None
                 };
                 let mut args = vec![];
-                if self.peek() != RPAREN {
+                if self.peek() != DOT {
                     args.push(self.consume_symbol()?);
                     while self.optional(&COMMA) {
                         args.push(self.consume_symbol()?);
@@ -572,6 +572,24 @@ impl Parser {
         Ok(Spanned::new(Function { name, args, body }, fun_span.extend(end_span)))
     }
 
+    fn impl_statement(&mut self) -> Res<Spanned<Stmt>> {
+        self.in_fun += 1;
+        let impl_span = self.span();
+        self.advance();
+        
+        let name = self.consume_symbol()?;
+        let args = self.args()?;
+        let mut body = vec![];
+        while self.peek() != KEND {
+            body.push(self.statement()?)
+        }
+        let end_span = self.span();
+        self.consume(&KEND)?;
+        self.in_fun -= 1;
+        
+        Ok(Spanned::new(ImplStmt { name, args, body }, impl_span.extend(end_span)))
+    }
+
     fn statement(&mut self) -> Res<Spanned<Stmt>> {
         let stmt = match self.peek() {
             KLET      => self.let_statement()?,
@@ -583,6 +601,7 @@ impl Parser {
             KBREAK    => self.break_statement()?,
             KFOR      => self.for_statement()?,
             KDEF      => self.def_statement()?,
+            KIMPL     => self.impl_statement()?,
             _ => {
                 let expr = self.expr()?;
                 let span = expr.span;

@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     error::error::{ Error, Res, simple_error, handle },
     ast::{
-        stmt::Stmt::{ self, * },
+        stmt::{Stmt::{ self, * }, Function},
         expr::{
             Expr::{ self, * },
             BinaryOp,
@@ -15,7 +15,11 @@ use crate::{
 
 use super::{
     value::Value::{ self, * },
-    std::get_global,
+    std::{
+        get_global, integer_type, 
+        bool_type, string_type
+    }, 
+    r#type::*,
 };
 
 impl BinaryOp {
@@ -57,21 +61,84 @@ pub enum State {
 }
 
 type Context = HashMap<String, Value>;
+type Types = HashMap<usize, Type>;
+type Impls = HashMap<String, Vec<Function>>;
 pub struct Engine {
-    ctx: Vec<Context>   
+    ctx: Vec<Context>,
+    
+    types: Types,
+    type_id: usize,
+    free_type_ids: Vec<usize>,
+
+    impls: Impls,
+
+    types_to_collect: Vec<HashSet<usize>>,
+    impls_to_collect: Vec<HashSet<String>>
 }
 
 impl Engine {
     pub fn new() -> Self {
-        Self { ctx: vec![get_global()] }
+        let mut engine = Self { 
+            ctx: vec![get_global()], 
+            types: Types::new(),
+            type_id: 12,
+            free_type_ids: vec![],
+            impls: Impls::new(),
+            types_to_collect: vec![HashSet::new()],
+            impls_to_collect: vec![HashSet::new()],
+        };
+        engine.init_builtin_types();
+        engine
+    }
+
+    fn init_builtin_types(&mut self) {
+        self.types.insert(INTEGER_TYPE_ID, integer_type());
+        self.types.insert(STRING_TYPE_ID, string_type());
+        self.types.insert(BOOL_TYPE_ID, bool_type());
     }
 
     pub fn enter_scope(&mut self) {
         self.ctx.push(Context::new());
+        self.types_to_collect.push(HashSet::new());
+        self.impls_to_collect.push(HashSet::new());
     }
 
     pub fn exit_scope(&mut self) {
-        self.ctx.pop().unwrap();
+        self.ctx.pop();
+        
+        for id in self.types_to_collect.pop().unwrap() {
+            self.types.remove(&id);
+            self.free_type_ids.push(id);
+        }
+        
+        for impl_name in self.impls_to_collect.pop().unwrap() {
+            let list = self.impls.get_mut(&impl_name).unwrap();
+            if list.len() <= 1 {
+                self.impls.remove(&impl_name);
+            } else {
+                list.pop();
+            }
+        }
+    }
+
+    pub fn get_id(&mut self) -> usize {
+        if let Some(id) = self.free_type_ids.last() {
+            *id
+        } else {
+            let id = self.type_id;
+            self.type_id += 1;
+            id
+        }
+    }
+
+    pub fn get_type(&self, id: usize) -> &Type {
+        self.types.get(&id).unwrap()
+    }
+
+    pub fn get_impl(&self, name: &str) -> Option<Function> {
+        self.impls.get(name)
+            .and_then(|list| list.last())
+            .and_then(|f| Some(f.clone()))
     }
 
     pub fn define(&mut self, var: String, val: Value) {
@@ -88,7 +155,7 @@ impl Engine {
         Err(format!("Undefined symbol `{var}`."))
     }
 
-    pub fn resolve(&self, var: &String) -> Result<Value, String> {
+    pub fn resolve(&self, var: &str) -> Result<Value, String> {
         for scope in self.ctx.iter().rev() {
             match scope.get(var) {
                 Some(val) => return Ok(val.clone()),
@@ -96,13 +163,6 @@ impl Engine {
             }
         }
         Err(format!("Undefined symbol `{var}`."))
-    }
-    
-    pub fn resolve_from_global(&self, var: &str) -> Result<Value, String> {
-        match self.ctx.first().unwrap().get(var) {
-            Some(val) => Ok(val.clone()),
-            None      => Err(format!("Undefined symbol `{var}`."))
-        }
     }
 
     pub fn collect_definitions(&mut self, stmts: &Vec<Spanned<Stmt>>) -> Res<()> {
@@ -113,11 +173,22 @@ impl Engine {
                         args: args.to_vec(), body: body.to_vec()
                     }),
                 
-                DefStmt { name, mems, mets } =>
-                    self.define(name.to_string(), DefVal { 
-                        name: name.to_string(), members: mems.to_owned(), methods: mets.to_owned() 
-                    }),
+                DefStmt { name, mems, mets } => {
+                    let id = self.get_id();
+                    self.types.insert(id, Type::Def { 
+                        members: mems.to_owned(), methods: mets.to_owned() 
+                    });
+                    self.types_to_collect.last_mut().unwrap().insert(id);
+                    self.define(name.to_string(), TypeVal(id));
+                }
                 
+                ImplStmt { name, args, body } => {
+                    self.impls_to_collect.last_mut().unwrap().insert(name.clone());
+                    self.impls.entry(name.to_string())
+                        .or_insert(vec![])
+                        .push(Function { name: name.clone(), args: args.clone(), body: body.clone() });
+                } 
+
                 _ => (),
             }
         }
@@ -154,7 +225,7 @@ impl Engine {
             AccessExpr { from, member } => {
                 let (type_name, mut members) = handle(self.eval(from)?.as_instance(), from.span)?;                
                 match members.insert(member.clone(), val) {
-                    Some(_) => Ok(InstanceVal { type_name, members }),
+                    Some(_) => Ok(InstanceVal { type_id: type_name, members }),
                     None    => simple_error(format!("`{type_name}` has no member called `{member}`"), from.span),
                 }
             }
@@ -168,6 +239,7 @@ impl Engine {
             // already defined them at `collect_definitions`
             DefStmt {..} => (),
             FunStmt {..} => (),
+            ImplStmt {..} => (),
             
             LetStmt { var, expr } => {
                 let value = self.eval(expr)?;
