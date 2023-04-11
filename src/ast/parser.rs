@@ -573,10 +573,25 @@ impl Parser {
     }
 
     fn impl_statement(&mut self) -> Res<Spanned<Stmt>> {
-        self.in_fun += 1;
         let impl_span = self.span();
         self.advance();
         
+        if self.peek() == KFOR {
+            self.advance();
+            let ty = self.consume_symbol()?;
+            
+            let mut mets = HashMap::new();
+            while self.peek() != KEND {
+                let met = self.def_method()?;
+                mets.insert(met.data.name.clone(), met.data);
+            }
+            let end_span = self.span();
+            self.consume(&KEND)?;
+            
+            return Ok(Spanned::new(ImplForStmt { ty, mets  }, impl_span.extend(end_span)))
+        }
+        
+        self.in_fun += 1;
         let name = self.consume_symbol()?;
         let args = self.args()?;
         let mut body = vec![];

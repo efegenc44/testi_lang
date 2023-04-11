@@ -25,6 +25,7 @@ pub enum Type {
     },
     BuiltInDef {
         members: Vec<String>,
-        methods: HashMap<String, BuiltInFunction>,
+        methods: HashMap<String, Function>,
+        builtin_methods: HashMap<String, BuiltInFunction>,
     }
 }

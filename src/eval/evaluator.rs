@@ -17,7 +17,7 @@ use super::{
     value::Value::{ self, * },
     std::{
         get_global, integer_type, 
-        bool_type, string_type
+        bool_type, string_type, function_type
     }, 
     r#type::*,
 };
@@ -92,6 +92,7 @@ impl Engine {
     }
 
     fn init_builtin_types(&mut self) {
+        self.types.insert(FUNCTION_TYPE_ID, function_type());
         self.types.insert(INTEGER_TYPE_ID, integer_type());
         self.types.insert(STRING_TYPE_ID, string_type());
         self.types.insert(BOOL_TYPE_ID, bool_type());
@@ -133,6 +134,10 @@ impl Engine {
 
     pub fn get_type(&self, id: usize) -> &Type {
         self.types.get(&id).unwrap()
+    }
+
+    pub fn get_type_mut(&mut self, id: usize) -> &mut Type {
+        self.types.get_mut(&id).unwrap()
     }
 
     pub fn get_impl(&self, name: &str) -> Option<Function> {
@@ -240,6 +245,16 @@ impl Engine {
             DefStmt {..} => (),
             FunStmt {..} => (),
             ImplStmt {..} => (),
+            
+            ImplForStmt { ty, mets } => {
+                let id = handle(handle(self.resolve(ty), stmt.span)?.as_type(), stmt.span)?;
+                match self.get_type_mut(id) {
+                    Type::Def        { methods, .. } |
+                    Type::BuiltInDef { methods, .. } => {
+                        methods.extend(mets.clone());
+                    }
+                }
+            },
             
             LetStmt { var, expr } => {
                 let value = self.eval(expr)?;

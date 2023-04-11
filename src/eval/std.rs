@@ -79,7 +79,7 @@ pub fn get_global() -> HashMap<String, Value> {
 pub fn integer_type() -> Type {
     Type::BuiltInDef { 
         members: vec![], 
-        methods: HashMap::from([
+        builtin_methods: HashMap::from([
             (String::from("times"), BuiltInFunction { arity: 2, fun: |values, engine| {
                 let v = values.last().unwrap().as_integer().unwrap();
                 let ListVal(list) = &values[1] else {
@@ -104,14 +104,15 @@ pub fn integer_type() -> Type {
                 let right = values[0].as_integer().map_err(|err| (err, None))?;
                 Ok(BoolVal(left == right))
             }})
-        ]) 
+        ]),
+        methods: HashMap::new(), 
     }
 }
 
 pub fn string_type() -> Type {
     Type::BuiltInDef { 
         members: vec![], 
-        methods: HashMap::from([
+        builtin_methods: HashMap::from([
             (String::from("parse_integer"), BuiltInFunction { arity: 0, fun: |values, _| {
                 let v = values.last().unwrap().as_string().unwrap();
                 match v.parse() {
@@ -119,14 +120,15 @@ pub fn string_type() -> Type {
                     Err(_)  => Err((format!("Couldn't convert to `Integer`"), None))
                 }
             }})
-        ]) 
+        ]),
+        methods: HashMap::new(), 
     }
 }
 
 pub fn bool_type() -> Type {
     Type::BuiltInDef { 
         members: vec![], 
-        methods: HashMap::from([
+        builtin_methods: HashMap::from([
             (String::from("and"), BuiltInFunction { arity: 1, fun: |values, _| {
                 let left  = values.last().unwrap().as_bool().unwrap();                    
                 let right = values[0].as_bool().map_err(|err| (err, None))?;
@@ -141,6 +143,15 @@ pub fn bool_type() -> Type {
                 let right = values[0].as_bool().map_err(|err| (err, None))?;
                 Ok(BoolVal(left == right))
             }})
-        ])
+        ]),
+        methods: HashMap::new(),
+    }
+}
+
+pub fn function_type() -> Type {
+    Type::BuiltInDef { 
+        members: vec![], 
+        builtin_methods: HashMap::new(), 
+        methods: HashMap::new(), 
     }
 }

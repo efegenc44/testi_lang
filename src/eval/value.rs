@@ -344,12 +344,20 @@ impl Value {
                     })
                 }
             }
-            Type::BuiltInDef { methods, .. } => {
-                if let Some(method) = methods.get(method) {
+            Type::BuiltInDef { builtin_methods, methods, .. } => {
+                if let Some(method) = builtin_methods.get(method) {
                     return Ok(BuiltInMethodVal { 
                         value: Box::new(self.clone()), 
                         arity: method.arity, 
                         fun: method.fun 
+                    })
+                }
+
+                if let Some(method) = methods.get(method) {
+                    return Ok(MethodVal { 
+                        value: Box::new(self.clone()), 
+                        args: method.args.clone(),
+                        body: method.body.clone()
                     })
                 }
             }
