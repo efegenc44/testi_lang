@@ -1,14 +1,12 @@
-use std::collections::HashMap;
-
 use crate::{
-    span::{ Span, Spanned}, 
+    span::{ Span, Spanned }, 
     lex::token::Token::{ self, * },
     error::error::{ Res, simple_error }
 };
 
 use super::{
-    expr::Expr::{ self, * },
-    stmt::{Stmt::{ self, * }, Function},
+    expr::Expr,
+    stmt::{ Stmt, self },
 };
 
 pub struct Parser {
@@ -120,14 +118,14 @@ impl Parser {
         self.advance();
 
         let mut expr = match ct {
-            SYMBOL(sym)  => Spanned::new(Variable(sym)   , cs),
-            STRING(s)    => Spanned::new(StringExpr(s)   , cs),
-            CHAR(ch)     => Spanned::new(CharExpr(ch)    , cs),
-            NATURAL(int) => Spanned::new(NaturalExpr(int), cs),
-            FLOAT(float) => Spanned::new(FloatExpr(float), cs),
-            KTRUE        => Spanned::new(BoolExpr(true)  , cs),
-            KFALSE       => Spanned::new(BoolExpr(false) , cs),
-            KNOTHING     => Spanned::new(NothingExpr     , cs),
+            SYMBOL(sym)  => Spanned::new(Expr::Variable(sym), cs),
+            STRING(s)    => Spanned::new(Expr::String(s), cs),
+            CHAR(ch)     => Spanned::new(Expr::Char(ch), cs),
+            NATURAL(int) => Spanned::new(Expr::Natural(int), cs),
+            FLOAT(float) => Spanned::new(Expr::Float(float), cs),
+            KTRUE        => Spanned::new(Expr::Bool(true), cs),
+            KFALSE       => Spanned::new(Expr::Bool(false), cs),
+            KNOTHING     => Spanned::new(Expr::Nothing, cs),
             PLUS |
             BANG |
             MINUS => {
@@ -135,7 +133,7 @@ impl Parser {
                 let product = self.product()?;
                 let product_span = product.span;
                 let operand = Box::new(product);
-                Spanned::new(UnaryExpr { op, operand }, cs.extend(product_span))
+                Spanned::new(Expr::Unary { op, operand }, cs.extend(product_span))
             },
             LPAREN => {
                 let expr = self.expr()?.data;
@@ -153,7 +151,7 @@ impl Parser {
                 }
                 let rsquare_span = self.span();
                 self.consume(&RSQUARE)?;
-                Spanned::new(ListExpr(list), cs.extend(rsquare_span))
+                Spanned::new(Expr::List(list), cs.extend(rsquare_span))
             },
             HASH => {
                 self.consume(&LSQUARE)?;
@@ -172,7 +170,7 @@ impl Parser {
                 }
                 let rcurly_span = self.span();
                 self.consume(&RSQUARE)?;
-                Spanned::new(MapExpr(pairs), cs.extend(rcurly_span))
+                Spanned::new(Expr::Map(pairs), cs.extend(rcurly_span))
             },
             BACKSLASH => {
                 let closure = if self.peek() == LPAREN {
@@ -194,7 +192,7 @@ impl Parser {
                 }
                 let backslash_span = self.span();
                 self.advance();
-                Spanned::new(FunctionExpr { args, body, closure }, cs.extend(backslash_span))
+                Spanned::new(Expr::Function { args, body, closure }, cs.extend(backslash_span))
             }
             _ => {
                 return simple_error(format!("Unexpected token `{ct}`."), cs)
@@ -206,7 +204,7 @@ impl Parser {
                 LPAREN => {
                     let exprs = self.paren_exprs()?;
                     let start_span = expr.span;
-                    expr = Spanned::new(ApplicationExpr {
+                    expr = Spanned::new(Expr::Application {
                         applied: Box::new(expr), 
                         exprs: exprs.data
                     }, start_span.extend(exprs.span)) 
@@ -217,7 +215,7 @@ impl Parser {
                     let index_expr = Box::new(self.expr()?);
                     let rsquare_span = self.span();
                     self.advance();
-                    expr = Spanned::new(IndexExpr {
+                    expr = Spanned::new(Expr::Index {
                         from: Box::new(expr), 
                         index_expr
                     }, start_span.extend(rsquare_span))
@@ -227,7 +225,7 @@ impl Parser {
                     let start_span = expr.span;
                     let member = self.consume_symbol()?;
                     let end_span = self.span();
-                    expr = Spanned::new(AccessExpr {
+                    expr = Spanned::new(Expr::Access {
                         from: Box::new(expr), 
                         member
                     }, start_span.extend(end_span))
@@ -245,7 +243,7 @@ impl Parser {
             self.advance();
             let right = self.product()?;
             let span = left.span.extend(right.span);
-            left = Spanned::new(BinaryExpr { 
+            left = Spanned::new(Expr::Binary { 
                 op, 
                 left : Box::new(left), 
                 right: Box::new(right) 
@@ -261,7 +259,7 @@ impl Parser {
             self.advance();
             let right = self.term()?;
             let span = left.span.extend(right.span);
-            left = Spanned::new(BinaryExpr { 
+            left = Spanned::new(Expr::Binary { 
                 op, 
                 left : Box::new(left), 
                 right: Box::new(right) 
@@ -277,7 +275,7 @@ impl Parser {
             self.advance();
             let right = self.arith()?;
             let span = left.span.extend(right.span);
-            left = Spanned::new(BinaryExpr {
+            left = Spanned::new(Expr::Binary {
                 op,
                 left : Box::new(left), 
                 right: Box::new(right)
@@ -295,7 +293,7 @@ impl Parser {
             self.advance();    
             let right = self.range()?;
             let span = left.span.extend(right.span);
-            left = Spanned::new(BinaryExpr { 
+            left = Spanned::new(Expr::Binary { 
                 op, 
                 left : Box::new(left), 
                 right: Box::new(right) 
@@ -310,7 +308,7 @@ impl Parser {
             self.advance();
             let right = self.comparison()?;
             let span = left.span.extend(right.span);
-            left = Spanned::new(TypeTestExpr { 
+            left = Spanned::new(Expr::TypeTest { 
                 expr: Box::new(left), 
                 ty: Box::new(right) 
             }, span)
@@ -325,7 +323,7 @@ impl Parser {
             self.advance();    
             let right = self.type_test()?;
             let span = left.span.extend(right.span);
-            left = Spanned::new(BinaryExpr { 
+            left = Spanned::new(Expr::Binary { 
                 op, 
                 left : Box::new(left), 
                 right: Box::new(right) 
@@ -341,7 +339,7 @@ impl Parser {
             self.advance();    
             let right = self.equality()?;
             let span = left.span.extend(right.span);
-            left = Spanned::new(BinaryExpr { 
+            left = Spanned::new(Expr::Binary { 
                 op, 
                 left : Box::new(left), 
                 right: Box::new(right) 
@@ -357,7 +355,7 @@ impl Parser {
             self.advance();    
             let right = self.logic_and()?;
             let span = left.span.extend(right.span);
-            left = Spanned::new(BinaryExpr { 
+            left = Spanned::new(Expr::Binary { 
                 op, 
                 left : Box::new(left), 
                 right: Box::new(right) 
@@ -375,7 +373,7 @@ impl Parser {
             self.advance();
             let right = self.assignment()?;
             let span = left.span.extend(right.span);
-            left = Spanned::new(AssignmentExpr { 
+            left = Spanned::new(Expr::Assignment { 
                 op,
                 assignee: Box::new(left), 
                 expr    : Box::new(right) 
@@ -397,7 +395,7 @@ impl Parser {
         self.consume(&EQUAL)?;
         let expr = self.expr()?;
         let span = let_span.extend(expr.span);
-        Ok(Spanned::new(LetStmt { var, expr }, span))
+        Ok(Spanned::new(Stmt::Let { var, expr }, span))
     }
 
     fn fun_statement(&mut self) -> Res<Spanned<Stmt>> {
@@ -423,9 +421,10 @@ impl Parser {
         self.consume(&KEND)?;
         self.in_fun -= 1;
         
+        let fun = stmt::Function { name, args, body };
         Ok(Spanned::new(match closure {
-            Some(closure) => ClosureStmt { name, args, body, closure },
-            None => FunStmt { name, args, body },
+            Some(closure) => Stmt::Closure { fun, closure },
+            None => Stmt::Function(fun),
         }, fun_span.extend(end_span)))
     }
 
@@ -439,11 +438,11 @@ impl Parser {
         self.advance();
         let expr = self.expr()?;
         let expr_span = expr.span;
-        Ok(Spanned::new(ReturnStmt(expr), return_span.extend(expr_span)))
+        Ok(Spanned::new(Stmt::Return(expr), return_span.extend(expr_span)))
     }
 
     fn branch(&mut self) -> Res<(Spanned<Expr>, Vec<Spanned<Stmt>>)> {
-        if [KIF, KEF].contains(&self.peek()) {
+        if let KIF | KEF = self.peek() {
             self.advance();
         }
         let cond = self.expr()?;
@@ -475,7 +474,7 @@ impl Parser {
         };
         // consume `end`
         self.advance();
-        Ok(Spanned::new(IfStmt { branches, elss }, if_span.extend(end_span)))
+        Ok(Spanned::new(Stmt::If { branches, elss }, if_span.extend(end_span)))
     }
 
     fn while_statement(&mut self) -> Res<Spanned<Stmt>> {
@@ -491,7 +490,7 @@ impl Parser {
         let end_span = self.span();
         self.advance();
         self.in_loop -= 1;
-        Ok(Spanned::new(WhileStmt { cond, body }, while_span.extend(end_span)))
+        Ok(Spanned::new(Stmt::While { cond, body }, while_span.extend(end_span)))
     }
 
     fn continue_statement(&mut self) -> Res<Spanned<Stmt>> {
@@ -500,7 +499,7 @@ impl Parser {
             return simple_error("Continue statement outside of a loop.", cnt_span)
         }
         self.advance();
-        Ok(Spanned::new(ContinueStmt, cnt_span))
+        Ok(Spanned::new(Stmt::Continue, cnt_span))
     }
     
     fn break_statement(&mut self) -> Res<Spanned<Stmt>> {
@@ -509,7 +508,7 @@ impl Parser {
             return simple_error("Break statement outside of a loop.", break_span)
         }
         self.advance();
-        Ok(Spanned::new(BreakStmt, break_span))
+        Ok(Spanned::new(Stmt::Break, break_span))
     }
 
     fn for_statement(&mut self) -> Res<Spanned<Stmt>> {
@@ -527,34 +526,33 @@ impl Parser {
         let end_span = self.span();
         self.advance();
         self.in_loop -= 1;
-        Ok(Spanned::new(ForStmt { var, iter, body }, for_span.extend(end_span)))
+        Ok(Spanned::new(Stmt::For { var, iter, body }, for_span.extend(end_span)))
     }
 
     fn def_statement(&mut self) -> Res<Spanned<Stmt>> {
         let def_span = self.span();
         self.advance();
         let name = self.consume_symbol()?;
-        let mut mems = vec![];
+        let mut members = vec![];
         while self.peek() != KEND && self.peek() != KIMPL {
-            mems.push(self.consume_symbol()?);
+            members.push(self.consume_symbol()?);
         }
-        let mets = if self.optional(&KIMPL) {
-            let mut mets = HashMap::new();
+        let methods = if self.optional(&KIMPL) {
+            let mut methods = vec![];
             while self.peek() != KEND {
-                let met = self.def_method()?;
-                mets.insert(met.data.name.clone(), met.data);
+                methods.push(self.def_method()?);
             }   
-            mets 
+            methods
         } else {
-            HashMap::new()
+            vec![]
         };
 
         let end_span = self.span(); 
         self.consume(&KEND)?;
-        Ok(Spanned::new(DefStmt { name, mems, mets }, def_span.extend(end_span)))
+        Ok(Spanned::new(Stmt::Def { name, members, methods }, def_span.extend(end_span)))
     }
 
-    fn def_method(&mut self) -> Res<Spanned<Function>> {
+    fn def_method(&mut self) -> Res<Spanned<stmt::Function>> {
         self.in_fun += 1;
         let fun_span = self.span();
         self.advance();
@@ -569,7 +567,7 @@ impl Parser {
         self.consume(&KEND)?;
         self.in_fun -= 1;
         
-        Ok(Spanned::new(Function { name, args, body }, fun_span.extend(end_span)))
+        Ok(Spanned::new(stmt::Function { name, args, body }, fun_span.extend(end_span)))
     }
 
     fn impl_statement(&mut self) -> Res<Spanned<Stmt>> {
@@ -580,15 +578,15 @@ impl Parser {
             self.advance();
             let ty = self.consume_symbol()?;
             
-            let mut mets = HashMap::new();
+            let mut mets = vec![];
             while self.peek() != KEND {
                 let met = self.def_method()?;
-                mets.insert(met.data.name.clone(), met.data);
+                mets.push(met);
             }
             let end_span = self.span();
             self.consume(&KEND)?;
             
-            return Ok(Spanned::new(ImplForStmt { ty, mets  }, impl_span.extend(end_span)))
+            return Ok(Spanned::new(Stmt::ImplFor { ty, mets }, impl_span.extend(end_span)))
         }
         
         self.in_fun += 1;
@@ -602,7 +600,7 @@ impl Parser {
         self.consume(&KEND)?;
         self.in_fun -= 1;
         
-        Ok(Spanned::new(ImplStmt { name, args, body }, impl_span.extend(end_span)))
+        Ok(Spanned::new(Stmt::Impl(stmt::Function { name, args, body }), impl_span.extend(end_span)))
     }
 
     fn statement(&mut self) -> Res<Spanned<Stmt>> {
@@ -620,7 +618,7 @@ impl Parser {
             _ => {
                 let expr = self.expr()?;
                 let span = expr.span;
-                Spanned::new(ExprStmt(expr), span)
+                Spanned::new(Stmt::Expr(expr), span)
             }
         };
         let _ = self.optional(&SEMICOLON);

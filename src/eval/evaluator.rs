@@ -1,11 +1,11 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{ HashMap, HashSet };
 
 use crate::{
     error::error::{ Error, Res, simple_error, handle },
     ast::{
-        stmt::{Stmt::{ self, * }, Function},
+        stmt::{Stmt, self},
         expr::{
-            Expr::{ self, * },
+            Expr,
             BinaryOp,
             UnaryOp, AssignOp
         },
@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::{
-    value::Value::{ self, * },
+    value::{ Value, self },
     std::{
         get_global, integer_type, 
         bool_type, string_type, function_type
@@ -62,7 +62,7 @@ pub enum State {
 
 type Context = HashMap<String, Value>;
 type Types = HashMap<usize, Type>;
-type Impls = HashMap<String, Vec<Function>>;
+type Impls = HashMap<String, Vec<value::Function>>;
 pub struct Engine {
     ctx: Vec<Context>,
     
@@ -81,7 +81,7 @@ impl Engine {
         let mut engine = Self { 
             ctx: vec![get_global()], 
             types: Types::new(),
-            type_id: 12,
+            type_id: 11,
             free_type_ids: vec![],
             impls: Impls::new(),
             types_to_collect: vec![HashSet::new()],
@@ -123,13 +123,13 @@ impl Engine {
     }
 
     pub fn get_id(&mut self) -> usize {
-        if let Some(id) = self.free_type_ids.last() {
-            *id
-        } else {
-            let id = self.type_id;
-            self.type_id += 1;
-            id
-        }
+        self.free_type_ids.last()
+            .and_then(|id| Some(*id))
+            .unwrap_or_else(|| {
+                let id = self.type_id;
+                self.type_id += 1;
+                id
+            })
     }
 
     pub fn get_type(&self, id: usize) -> &Type {
@@ -140,7 +140,7 @@ impl Engine {
         self.types.get_mut(&id).unwrap()
     }
 
-    pub fn get_impl(&self, name: &str) -> Option<Function> {
+    pub fn get_impl(&self, name: &str) -> Option<value::Function> {
         self.impls.get(name)
             .and_then(|list| list.last())
             .and_then(|f| Some(f.clone()))
@@ -150,7 +150,7 @@ impl Engine {
         self.ctx.last_mut().unwrap().insert(var, val);
     }
 
-    fn redefine(&mut self, var: &String, val: Value) -> Result<(), String> {
+    fn redefine(&mut self, var: &str, val: Value) -> Result<(), String> {
         for scope in self.ctx.iter_mut().rev() {
             match scope.get_mut(var) {
                 Some(v) => return Ok(*v = val.clone()),
@@ -173,26 +173,30 @@ impl Engine {
     pub fn collect_definitions(&mut self, stmts: &Vec<Spanned<Stmt>>) -> Res<()> {
         for stmt in stmts {
             match &stmt.data {
-                FunStmt { name, args, body } =>
-                    self.define(name.to_string(), FunVal {
-                        args: args.to_vec(), body: body.to_vec()
+                Stmt::Function(stmt::Function { name, args, body }) =>
+                    self.define(name.to_string(), Value::Function {
+                        fun: value::Function { 
+                            args: args.clone(), body: body.clone() 
+                        },
+                        value: None,
+                        closure: None,
                     }),
                 
-                DefStmt { name, mems, mets } => {
+                Stmt::Def { name, members, methods } => {
                     let id = self.get_id();
                     self.types.insert(id, Type::Def { 
-                        members: mems.to_owned(), methods: mets.to_owned() 
+                        members: members.to_owned(), methods: methods.iter().map(Into::into).collect() 
                     });
                     self.types_to_collect.last_mut().unwrap().insert(id);
-                    self.define(name.to_string(), TypeVal(id));
+                    self.define(name.to_string(), Value::Type(id));
                 }
                 
-                ImplStmt { name, args, body } => {
+                Stmt::Impl(stmt::Function { name, args, body }) => {
                     self.impls_to_collect.last_mut().unwrap().insert(name.clone());
                     self.impls.entry(name.to_string())
                         .or_insert(vec![])
-                        .push(Function { name: name.clone(), args: args.clone(), body: body.clone() });
-                } 
+                        .push(value::Function { args: args.clone(), body: body.clone() });
+                }
 
                 _ => (),
             }
@@ -218,19 +222,19 @@ impl Engine {
 
     fn assign(&mut self, assignee: &Spanned<Expr>, val: Value) -> Res<Value> {
         match &assignee.data {
-            Variable(var) => match self.redefine(&var, val.clone()) {
+            Expr::Variable(var) => match self.redefine(&var, val.clone()) {
                 Ok(())   => Ok(val),
                 Err(err) => simple_error(err, assignee.span),
             },
             
-            IndexExpr { from, index_expr } =>
+            Expr::Index { from, index_expr } =>
                 handle(handle(self.eval(from)?.indexable(), from.span)?
                     .replace(self.eval(index_expr)?, val), index_expr.span),
 
-            AccessExpr { from, member } => {
+            Expr::Access { from, member } => {
                 let (type_name, mut members) = handle(self.eval(from)?.as_instance(), from.span)?;                
                 match members.insert(member.clone(), val) {
-                    Some(_) => Ok(InstanceVal { type_id: type_name, members }),
+                    Some(_) => Ok(Value::Instance { type_id: type_name, members }),
                     None    => simple_error(format!("`{type_name}` has no member called `{member}`"), from.span),
                 }
             }
@@ -242,37 +246,42 @@ impl Engine {
         match &stmt.data { 
             //   Ignore Functions and Definitions at `run` because we
             // already defined them at `collect_definitions`
-            DefStmt {..} => (),
-            FunStmt {..} => (),
-            ImplStmt {..} => (),
+            Stmt::Def {..} => (),
+            Stmt::Function {..} => (),
+            Stmt::Impl {..} => (),
             
-            ImplForStmt { ty, mets } => {
+            Stmt::ImplFor { ty, mets } => {
                 let id = handle(handle(self.resolve(ty), stmt.span)?.as_type(), stmt.span)?;
                 match self.get_type_mut(id) {
                     Type::Def        { methods, .. } |
                     Type::BuiltInDef { methods, .. } => {
-                        methods.extend(mets.clone());
+                        let mets: HashMap<_, _> = mets.iter().map(Into::into).collect();
+                        methods.extend(mets);
                     }
                 }
             },
             
-            LetStmt { var, expr } => {
+            Stmt::Let { var, expr } => {
                 let value = self.eval(expr)?;
                 self.define(var.to_string(), value);
             },
             
-            ClosureStmt { name, args, body, closure } => {
+            Stmt::Closure { fun: stmt::Function { name, args, body }, closure } => {
                 let mut closure_map = HashMap::with_capacity(closure.len());
                 for var in closure {
                     closure_map.insert(var.to_string(), handle(self.resolve(var), stmt.span)?);
                 }
                 
-                self.define(name.to_string(), ClosureVal {
-                    args: args.to_vec(), body: body.to_vec(), closure: closure_map
+                self.define(name.to_string(), Value::Function { 
+                    fun: value::Function { 
+                        args: args.clone(), body: body.clone() 
+                    },
+                    value: None, 
+                    closure: Some(closure_map) 
                 });
             },
             
-            IfStmt { branches, elss } => {
+            Stmt::If { branches, elss } => {
                 for (cond, branch) in branches {
                     if handle(self.eval(cond)?.as_bool(), cond.span)? {
                         return self.run_block(branch)
@@ -283,7 +292,7 @@ impl Engine {
                 } 
             },
             
-            WhileStmt { cond, body } =>
+            Stmt::While { cond, body } =>
                 while handle(self.eval(cond)?.as_bool(), cond.span)? {
                     match self.run_block(body)? {
                         res @ State::Return(_) => return Ok(res),
@@ -293,7 +302,7 @@ impl Engine {
                     }
                 },
             
-            ForStmt { var, iter, body } => {
+            Stmt::For { var, iter, body } => {
                 for i in handle(self.eval(iter)?.iter(), iter.span)? {
                     self.enter_scope();
                     self.collect_definitions(body)?;
@@ -313,20 +322,20 @@ impl Engine {
                 }
             },
             
-            ExprStmt(e) => {
+            Stmt::Expr(e) => {
                 self.eval(e)?;
             }
             
-            ReturnStmt(e) => return Ok(State::Return(self.eval(e)?)),
-            ContinueStmt  => return Ok(State::Continue),
-            BreakStmt     => return Ok(State::Break),
+            Stmt::Return(e) => return Ok(State::Return(self.eval(e)?)),
+            Stmt::Continue  => return Ok(State::Continue),
+            Stmt::Break     => return Ok(State::Break),
         };
         Ok(State::Ok)
     }
     
     pub fn eval(&mut self, expr: &Spanned<Expr>) -> Res<Value> {
         match &expr.data {
-            AssignmentExpr { op, assignee, expr: e } => {
+            Expr::Assignment { op, assignee, expr: e } => {
                 let val = match op {
                     AssignOp::Normal => self.eval(e)?,
                     AssignOp::Composite(bop) => 
@@ -337,17 +346,17 @@ impl Engine {
                 self.assign(assignee, val)
             },
             
-            BinaryExpr { op, left, right } => 
+            Expr::Binary { op, left, right } => 
                 handle(self.eval(&left)?.get_method(&op.get_method_name(), self), expr.span)?
                     .apply(vec![self.eval(&right)?], self)
                     .map_err(|(err, inner_err)| Error::new(err, expr.span, inner_err)),
             
-            UnaryExpr { op, operand } => 
+            Expr::Unary { op, operand } => 
                 handle(self.eval(&operand)?.get_method(&op.get_method_name(), self), expr.span)?
                     .apply(vec![], self)
                     .map_err(|(err, inner_err)| Error::new(err, expr.span, inner_err)),
             
-            ApplicationExpr { applied, exprs } => {
+            Expr::Application { applied, exprs } => {
                 let values: Result<_, _> = exprs
                     .iter()
                     .map(|expr| self.eval(expr))
@@ -358,14 +367,14 @@ impl Engine {
                     .map_err(|(err, inner_err)| Error::new(err, expr.span, inner_err))
             },
             
-            IndexExpr { from, index_expr } =>
+            Expr::Index { from, index_expr } =>
                 handle(self.eval(from)?.get_method("index", self), from.span)?
                     .apply(vec![self.eval(index_expr)?], self)
                     .map_err(|(err, inner_err)| Error::new(err, expr.span, inner_err)),
            
-            AccessExpr { from, member } => {
+            Expr::Access { from, member } => {
                 let value = self.eval(from)?;
-                if let InstanceVal { members, .. } = &value {
+                if let Value::Instance { members, .. } = &value {
                     if let Some(val) = members.get(member) {
                         return Ok(val.clone())
                     }
@@ -376,44 +385,52 @@ impl Engine {
                 }
             },
             
-            FunctionExpr { args, body, closure } => Ok(
-                if let Some(closure) = closure {
+            Expr::Function { args, body, closure } => {
+                let closure_map = if let Some(closure) = closure {
                     let mut closure_map = HashMap::with_capacity(closure.len());
                     for var in closure {
                         closure_map.insert(var.to_string(), handle(self.resolve(var), expr.span)?);
                     }
-                    ClosureVal { args: args.to_owned(), body: body.to_owned(), closure: closure_map }
+                    Some(closure_map)
                 } else {
-                    FunVal { args: args.to_owned(), body: body.to_owned() }
-                }
-            ),
+                    None
+                };
+                
+                Ok(Value::Function { 
+                    fun: value::Function { 
+                        args: args.to_owned(), body: body.to_owned()
+                    },
+                    value: None,
+                    closure: closure_map,
+                })
+            },
             
-            TypeTestExpr { expr: e, ty } => 
-                Ok(BoolVal(self.eval(e)?.ty() == handle(self.eval(ty)?.as_type(), ty.span)?)),
+            Expr::TypeTest { expr: e, ty } => 
+                Ok(Value::Bool(self.eval(e)?.ty() == handle(self.eval(ty)?.as_type(), ty.span)?)),
             
-            ListExpr(exprs) => {
+            Expr::List(exprs) => {
                 let list: Result<_, _> = exprs
                     .iter()
                     .map(|e| self.eval(e))
                     .collect();
-                Ok(ListVal(list?))
+                Ok(Value::List(list?))
             },
             
-            MapExpr(pairs) => {
+            Expr::Map(pairs) => {
                 let mut map = HashMap::with_capacity(pairs.len());
                 for (key, value) in pairs {
                     map.insert(handle(self.eval(key)?.try_into(), key.span)?, self.eval(value)?);
                 }
-                Ok(MapVal(map))
+                Ok(Value::Map(map))
             },
             
-            NaturalExpr(nat) => Ok(IntegerVal(*nat as i32)),
-            FloatExpr(float) => Ok(FloatVal(*float)),
-            StringExpr(s) => Ok(StringVal(s.to_string())),
-            CharExpr(ch) => Ok(CharVal(*ch)),
-            BoolExpr(b) => Ok(BoolVal(*b)),
-            NothingExpr => Ok(NothingVal),
-            Variable(var) => Ok(handle(self.resolve(var), expr.span)?),
+            Expr::Natural(nat) => Ok(Value::Integer(*nat as i32)),
+            Expr::Float(float) => Ok(Value::Float(*float)),
+            Expr::String(s) => Ok(Value::String(s.to_string())),
+            Expr::Char(ch) => Ok(Value::Char(*ch)),
+            Expr::Bool(b) => Ok(Value::Bool(*b)),
+            Expr::Nothing => Ok(Value::Nothing),
+            Expr::Variable(var) => Ok(handle(self.resolve(var), expr.span)?),
         }
     }
 }

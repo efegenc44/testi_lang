@@ -124,48 +124,48 @@ impl From<Token> for AssignOp {
 
 #[derive(Clone, Debug)]
 pub enum Expr {
-    AssignmentExpr {
+    Assignment {
         op: AssignOp,
         assignee: Box<Spanned<Expr>>,
         expr: Box<Spanned<Expr>>
     },
-    BinaryExpr{
+    Binary {
         op   : BinaryOp,
         left : Box<Spanned<Expr>>,
         right: Box<Spanned<Expr>>,
     },
-    UnaryExpr{
+    Unary {
         op     : UnaryOp,
         operand: Box<Spanned<Expr>>,
     },
-    ApplicationExpr {
+    Application {
         applied: Box<Spanned<Expr>>,
         exprs  : Vec<Spanned<Expr>>
     },
-    IndexExpr {
+    Index {
         from: Box<Spanned<Expr>>,
         index_expr: Box<Spanned<Expr>>,
     },
-    AccessExpr {
+    Access {
         from: Box<Spanned<Expr>>,
         member: String,
     },
-    TypeTestExpr {
+    TypeTest {
         expr: Box<Spanned<Expr>>,
         ty: Box<Spanned<Expr>>
     },
-    FunctionExpr {
+    Function {
         args: Vec<String>,
         body: Vec<Spanned<Stmt>>,
         closure: Option<Vec<String>>
     },
-    ListExpr(Vec<Spanned<Expr>>),
-    MapExpr(Vec<(Spanned<Expr>, Spanned<Expr>)>),
-    NaturalExpr(usize),
-    FloatExpr(f32),
-    StringExpr(String),
-    CharExpr(char),
-    BoolExpr(bool),
+    List(Vec<Spanned<Expr>>),
+    Map(Vec<(Spanned<Expr>, Spanned<Expr>)>),
+    Natural(usize),
+    Float(f32),
+    String(String),
+    Char(char),
+    Bool(bool),
     Variable(String),
-    NothingExpr,
+    Nothing,
 }
