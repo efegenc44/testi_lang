@@ -91,6 +91,16 @@ pub fn integer_type() -> Type {
                 let right = values[0].as_integer().map_err(|err| (err, None))?;
                 Ok(Value::Integer(left + right))
             }}),
+            (String::from("le"), BuiltInFunction { arity: 1, fun: |values, _| {
+                let left  = values.last().unwrap().as_integer().unwrap();                    
+                let right = values[0].as_integer().map_err(|err| (err, None))?;
+                Ok(Value::Bool(left <= right))
+            }}),
+            (String::from("sub"), BuiltInFunction { arity: 1, fun: |values, _| {
+                let left  = values.last().unwrap().as_integer().unwrap();                    
+                let right = values[0].as_integer().map_err(|err| (err, None))?;
+                Ok(Value::Integer(left - right))
+            }}),
             (String::from("neg"), BuiltInFunction { arity: 0, fun: |values, _| {
                 let v = values.last().unwrap().as_integer().unwrap();                    
                 Ok(Value::Integer(-v))

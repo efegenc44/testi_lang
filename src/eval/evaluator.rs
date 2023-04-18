@@ -1,16 +1,16 @@
 use std::collections::{ HashMap, HashSet };
 
 use crate::{
-    error::error::{ Error, Res, simple_error, handle },
+    error::{error::{ Error, Res, simple_error, handle }, reporter::Repoter},
     ast::{
         stmt::{Stmt, self},
         expr::{
             Expr,
             BinaryOp,
             UnaryOp, AssignOp
-        },
+        }, parser::Parser,
     },
-    span::Spanned
+    span::Spanned, lex::lexer::Lexer
 };
 
 use super::{
@@ -62,6 +62,7 @@ pub enum State {
 
 type Context = HashMap<String, Value>;
 type Types = HashMap<usize, Type>;
+type Modules = HashMap<usize, Context>;
 type Impls = HashMap<String, Vec<value::Function>>;
 pub struct Engine {
     ctx: Vec<Context>,
@@ -70,22 +71,35 @@ pub struct Engine {
     type_id: usize,
     free_type_ids: Vec<usize>,
 
+    modules: Modules,
+    module_id: usize,
+    free_module_ids: Vec<usize>,
+
     impls: Impls,
 
     types_to_collect: Vec<HashSet<usize>>,
-    impls_to_collect: Vec<HashSet<String>>
+    impls_to_collect: Vec<HashSet<String>>,
+    modules_to_collect: Vec<HashSet<usize>>
 }
 
 impl Engine {
     pub fn new() -> Self {
         let mut engine = Self { 
             ctx: vec![get_global()], 
+
             types: Types::new(),
-            type_id: 11,
+            type_id: 12,
             free_type_ids: vec![],
+
+            modules: Modules::new(),
+            module_id: 0,
+            free_module_ids: vec![],
+
             impls: Impls::new(),
+
             types_to_collect: vec![HashSet::new()],
             impls_to_collect: vec![HashSet::new()],
+            modules_to_collect: vec![HashSet::new()],
         };
         engine.init_builtin_types();
         engine
@@ -102,6 +116,7 @@ impl Engine {
         self.ctx.push(Context::new());
         self.types_to_collect.push(HashSet::new());
         self.impls_to_collect.push(HashSet::new());
+        self.modules_to_collect.push(HashSet::new());
     }
 
     pub fn exit_scope(&mut self) {
@@ -110,6 +125,11 @@ impl Engine {
         for id in self.types_to_collect.pop().unwrap() {
             self.types.remove(&id);
             self.free_type_ids.push(id);
+        }
+
+        for id in self.modules_to_collect.pop().unwrap() {
+            self.modules.remove(&id);
+            self.free_module_ids.push(id);
         }
         
         for impl_name in self.impls_to_collect.pop().unwrap() {
@@ -128,6 +148,16 @@ impl Engine {
             .unwrap_or_else(|| {
                 let id = self.type_id;
                 self.type_id += 1;
+                id
+            })
+    }
+
+    pub fn get_module_id(&mut self) -> usize {
+        self.free_module_ids.last()
+            .and_then(|id| Some(*id))
+            .unwrap_or_else(|| {
+                let id = self.module_id;
+                self.module_id += 1;
                 id
             })
     }
@@ -250,6 +280,59 @@ impl Engine {
             Stmt::Function {..} => (),
             Stmt::Impl {..} => (),
             
+            Stmt::Import(strings) => {
+                let module_name = strings.last().unwrap().clone();
+                let mut path = strings.join("/");
+                path.push_str(".testi");
+                
+                let file = std::fs::read_to_string(&path).expect("Error reading a file.");
+                let mut reporter = Repoter::new(&path, &file);
+                
+                let tokens = match Lexer::new(&file).collect() {
+                    Ok(tokens) => tokens,
+                    Err(err)   => {
+                        reporter.report(err, "tokenizing");
+                        std::process::exit(1);
+                    },
+                };
+
+                let stmts: Vec<_> = match Parser::new(tokens).collect() {
+                    Ok(stmts) => stmts,
+                    Err(err)  => {
+                        reporter.report(err, "parsing");
+                        std::process::exit(1);
+                    },
+                };
+
+                self.enter_scope();
+                match self.collect_definitions(&stmts) {
+                    Ok(_)    => (),
+                    Err(err) => {
+                        reporter.report(err, "runtime");
+                        std::process::exit(1);
+                    }
+                }
+                for stmt in &stmts {
+                    match self.run(&stmt) {
+                        Ok(_)    => (),
+                        Err(err) => {
+                            reporter.report(err, "runtime");
+                            std::process::exit(1);
+                        }
+                    }
+                };
+
+                let module = self.ctx.pop().unwrap();
+                let id = self.get_module_id();
+                self.modules.insert(id, module);
+                self.modules_to_collect.last_mut().unwrap().insert(id);
+                
+                // Because we don't exit the scope, we need to do it by hand.
+                self.modules_to_collect.pop();
+
+                self.define(module_name, Value::Module(id))
+            }
+
             Stmt::ImplFor { ty, mets } => {
                 let id = handle(handle(self.resolve(ty), stmt.span)?.as_type(), stmt.span)?;
                 match self.get_type_mut(id) {
@@ -374,10 +457,19 @@ impl Engine {
            
             Expr::Access { from, member } => {
                 let value = self.eval(from)?;
-                if let Value::Instance { members, .. } = &value {
-                    if let Some(val) = members.get(member) {
-                        return Ok(val.clone())
+                match &value {
+                    Value::Instance { members, .. } =>
+                        if let Some(val) = members.get(member) {
+                            return Ok(val.clone())
+                        }
+                    
+                    Value::Module(id) => {
+                        let Some(value) = self.modules.get(id).unwrap().get(member) else {
+                            return simple_error(format!("`Module` has no member, nor method called `{member}`"), from.span)
+                        };
+                        return Ok(value.clone())
                     }
+                    _ => (),
                 }
                 match value.get_method(&member, self) {
                     Ok(met) => Ok(met),

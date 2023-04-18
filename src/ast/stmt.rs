@@ -11,6 +11,7 @@ pub struct Function {
 
 #[derive(Clone, Debug)]
 pub enum Stmt {
+    Import(Vec<String>),
     Def {
         name: String,
         members: Vec<String>,

@@ -111,6 +111,7 @@ impl Lexer {
             "or"       => KOR,
             "is"       => KIS,
             "let"      => KLET,
+            "import"   => KIMPORT,
             "fun"      => KFUN,
             "def"      => KDEF,
             "impl"     => KIMPL,

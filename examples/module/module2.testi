@@ -1,0 +1,9 @@
+import examples.module.module3
+
+let a = 4
+
+let f = module3.b
+
+fun (module3) print_something()
+    print(module3.b)
+end

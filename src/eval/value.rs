@@ -101,6 +101,7 @@ pub enum Value {
     },
     Nothing,
     Type(usize),
+    Module(usize)
 }
 
 impl std::fmt::Display for Value {
@@ -158,6 +159,7 @@ impl std::fmt::Display for Value {
             Value::BuiltInFunction {..} => write!(f, "<built-in function>"),
             Value::Nothing            => write!(f, "nothing"),
             Value::Type(ty)           => write!(f, "{ty}"),
+            Value::Module(_)          => write!(f, "<module>"),
         }
     }
 }
@@ -182,6 +184,7 @@ impl Value {
             Value::BuiltInFunction {..} => FUNCTION_TYPE_ID,
             Value::Nothing            => NOTHING_TYPE_ID,
             Value::Type(_)            => TYPE_TYPE_ID,
+            Value::Module(_)          => MODULE_TYPE_ID,
             
             Value::Instance { type_id, .. } => *type_id,
             
@@ -387,6 +390,8 @@ impl Value {
 
                 if let Some(value) = self_value {
                     engine.define(String::from("self"), *value.clone());
+                } else {
+                    engine.define(String::from("recur"), self.clone());
                 }
 
                 if let Some(closure) = closure {

@@ -14,7 +14,8 @@ pub const RANGE_TYPE_ID    : usize = 6;
 pub const FUNCTION_TYPE_ID : usize = 7;
 pub const NOTHING_TYPE_ID  : usize = 8;
 pub const TYPE_TYPE_ID     : usize = 9;
-pub const CHARACTER_TYPE_ID: usize = 10;
+pub const MODULE_TYPE_ID   : usize = 10;
+pub const CHARACTER_TYPE_ID: usize = 11;
 
 
 pub enum Type {

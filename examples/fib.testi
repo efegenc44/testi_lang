@@ -2,7 +2,7 @@ fun fib(n)
     if n <= 2 then
         return 1
     end
-    fib(n-1) + fib(n-2)
+    recur(n-1) + recur(n-2)
 end
 
 fun memoized_fib(n)
@@ -17,7 +17,7 @@ fun memoized_fib(n)
             return 1
         end
         
-        let res = fib(n-1) + fib(n-2)
+        let res = recur(n-1) + recur(n-2)
         cache += [n, res] 
         res
     end

@@ -603,6 +603,19 @@ impl Parser {
         Ok(Spanned::new(Stmt::Impl(stmt::Function { name, args, body }), impl_span.extend(end_span)))
     }
 
+    fn import_statement(&mut self) -> Res<Spanned<Stmt>> {
+        let import_span = self.span();
+        self.advance();
+
+        let mut strings = vec![self.consume_symbol()?];
+        while let DOT = self.peek() {
+            self.advance();
+            strings.push(self.consume_symbol()?)
+        }
+
+        Ok(Spanned::new(Stmt::Import(strings), import_span))
+    }
+
     fn statement(&mut self) -> Res<Spanned<Stmt>> {
         let stmt = match self.peek() {
             KLET      => self.let_statement()?,
@@ -615,6 +628,7 @@ impl Parser {
             KFOR      => self.for_statement()?,
             KDEF      => self.def_statement()?,
             KIMPL     => self.impl_statement()?,
+            KIMPORT   => self.import_statement()?,
             _ => {
                 let expr = self.expr()?;
                 let span = expr.span;
