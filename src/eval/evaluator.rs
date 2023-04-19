@@ -17,7 +17,7 @@ use super::{
     value::{ Value, self },
     std::{
         get_global, integer_type, 
-        bool_type, string_type, function_type
+        bool_type, string_type, function_type, range_type, list_type, nothing_type
     }, 
     r#type::*,
 };
@@ -109,7 +109,10 @@ impl Engine {
         self.types.insert(FUNCTION_TYPE_ID, function_type());
         self.types.insert(INTEGER_TYPE_ID, integer_type());
         self.types.insert(STRING_TYPE_ID, string_type());
+        self.types.insert(RANGE_TYPE_ID, range_type());
         self.types.insert(BOOL_TYPE_ID, bool_type());
+        self.types.insert(LIST_TYPE_ID, list_type());
+        self.types.insert(NOTHING_TYPE_ID, nothing_type());
     }
 
     pub fn enter_scope(&mut self) {
@@ -386,7 +389,13 @@ impl Engine {
                 },
             
             Stmt::For { var, iter, body } => {
-                for i in handle(self.eval(iter)?.iter(), iter.span)? {
+                for step in 0.. {
+                    let i = handle(self.eval(&iter)?.get_method("step", self), iter.span)?
+                                .apply(vec![Value::Integer(step)], self)
+                                .map_err(|(err, inner_err)| Error::new(err, iter.span, inner_err))?;
+                    if let Value::Nothing = i {
+                        break
+                    }
                     self.enter_scope();
                     self.collect_definitions(body)?;
                     self.define(var.to_string(), i);

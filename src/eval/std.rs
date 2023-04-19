@@ -161,3 +161,40 @@ pub fn function_type() -> Type {
         methods: HashMap::new(), 
     }
 }
+
+pub fn range_type() -> Type {
+    Type::BuiltInDef { 
+        members: vec![String::from("bot"), String::from("up")], 
+        builtin_methods: HashMap::new(), 
+        methods: HashMap::new(), 
+    }
+}
+
+pub fn nothing_type() -> Type {
+    Type::BuiltInDef { 
+        members: vec![String::from("bot"), String::from("up")], 
+        builtin_methods: HashMap::new(), 
+        methods: HashMap::new(), 
+    }
+}
+
+pub fn list_type() -> Type {
+    Type::BuiltInDef { 
+        members: vec![], 
+        builtin_methods: HashMap::from([
+            (String::from("index"), BuiltInFunction { arity: 1, fun: |values, _| {
+                let Value::List(list) = values.last().unwrap() else {unreachable!()};
+                let index_value = values[0].as_integer().map_err(|err| (err, None))? as usize;
+                if index_value >= list.len() {
+                    return Err((format!("Index out of bounds."), None))
+                }
+                Ok(list[index_value].clone())
+            }}),
+            (String::from("len"), BuiltInFunction { arity: 0, fun: |values, _| {
+                let Value::List(list) = values.last().unwrap() else {unreachable!()};
+                Ok(Value::Integer(list.len() as i32))
+            }}),
+        ]), 
+        methods: HashMap::new(), 
+    }
+}

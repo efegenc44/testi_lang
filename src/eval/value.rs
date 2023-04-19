@@ -85,7 +85,6 @@ pub enum Value {
     Bool(bool),
     List(Vec<Value>),
     Map(HashMap<KeyValue, Value>),
-    Range(i32, i32),
     Instance {
         type_id: usize, 
         members: HashMap<String, Value>,
@@ -154,7 +153,6 @@ impl std::fmt::Display for Value {
                 }
                 Ok(())
             },
-            Value::Range(bot, up)     => write!(f, "{bot}..{up}"),
             Value::Function {..}        => write!(f, "<function>"),
             Value::BuiltInFunction {..} => write!(f, "<built-in function>"),
             Value::Nothing            => write!(f, "nothing"),
@@ -179,7 +177,6 @@ impl Value {
             Value::Bool(_)            => BOOL_TYPE_ID,
             Value::List(_)            => LIST_TYPE_ID,
             Value::Map(_)             => MAP_TYPE_ID,
-            Value::Range(_, _)        => RANGE_TYPE_ID,
             Value::Function {..}        |
             Value::BuiltInFunction {..} => FUNCTION_TYPE_ID,
             Value::Nothing            => NOTHING_TYPE_ID,
@@ -245,31 +242,6 @@ impl Value {
             Value::List(_)   |
             Value::Map(_)    => Ok(self),
             _ => Err(format!("`{ty}` is not indexable.", ty = self.ty()))
-        }
-    }
-
-    pub fn iter(self) -> Result<Box<dyn Iterator<Item = Value>>, String> {
-        match self {
-            Value::String(s)  => {
-                let iter = s.chars().map(|ch| {
-                    Value::Char(ch)
-                }).collect::<Vec<_>>().into_iter();
-                Ok(Box::new(iter))
-            },
-            Value::List(list) => Ok(Box::new(list.into_iter())),
-            Value::Map(map)   => {
-                let iter = map.into_iter().map(|(key, value)| {
-                    Value::List(vec![key.into(), value])
-                }).collect::<Vec<_>>().into_iter();
-                Ok(Box::new(iter))
-            },
-            Value::Range(bot, up) => {
-                let iter = (bot..up).into_iter().map(|n| {
-                    Value::Integer(n)
-                });
-                Ok(Box::new(iter))
-            },
-            _ => Err(format!("`{ty}` is not iterable.", ty = self.ty()))
         }
     }
 
