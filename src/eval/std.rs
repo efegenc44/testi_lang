@@ -7,14 +7,14 @@ pub fn get_global() -> HashMap<String, Value> {
         ("Integer".to_string(), Value::Type(INTEGER_TYPE_ID)),
         ("Bool".to_string(), Value::Type(BOOL_TYPE_ID)),
         ("String".to_string(), Value::Type(STRING_TYPE_ID)),
-        ("Float".to_string(), Value::Type(FLOAT_TYPE_ID)),
+        //("Float".to_string(), Value::Type(FLOAT_TYPE_ID)),
         ("Range".to_string(), Value::Type(RANGE_TYPE_ID)),
-        ("Character".to_string(), Value::Type(CHARACTER_TYPE_ID)),
+        //("Character".to_string(), Value::Type(CHARACTER_TYPE_ID)),
         ("Function".to_string() , Value::Type(FUNCTION_TYPE_ID)),
         ("List".to_string(), Value::Type(LIST_TYPE_ID)),
-        ("Map".to_string(), Value::Type(MAP_TYPE_ID)),
+        //("Map".to_string(), Value::Type(MAP_TYPE_ID)),
         ("Nothing".to_string(), Value::Type(NOTHING_TYPE_ID)),
-        ("Type".to_string(), Value::Type(TYPE_TYPE_ID)),
+        //("Type".to_string(), Value::Type(TYPE_TYPE_ID)),
         
         ("print".to_string(), Value::BuiltInFunction {
             fun: BuiltInFunction { arity: 1, fun: |vals, _| {
@@ -29,20 +29,6 @@ pub fn get_global() -> HashMap<String, Value> {
             }},
             value: None
         }),
-        ("contains_key".to_string(), Value::BuiltInFunction { 
-            fun: BuiltInFunction { arity: 2, fun: |vals, _| {
-                let fv = vals.get(0).unwrap();
-                let Value::Map(map) = fv else {
-                    return Err((format!("Expected `Map` as first argument, not `{ty}`", ty = fv.ty()), None));
-                };
-                let key = match vals[1].clone().try_into() {
-                    Ok(key)  => key,
-                    Err(err) => return Err((err, None)),
-                };
-                Ok(Value::Bool(map.contains_key(&key)))     
-            }},
-            value: None
-        }),
         ("map".to_string(), Value::BuiltInFunction { 
             fun: BuiltInFunction { arity: 2, fun: |vals, engine| {
                 let fv = vals.get(0).unwrap();
@@ -50,11 +36,12 @@ pub fn get_global() -> HashMap<String, Value> {
                 let Value::List(list) = sv else {
                     return Err((format!("Expected `List` as second argument, not `{ty}`", ty = sv.ty()), None));
                 };
+                let list = engine.lists.get(list).clone();
                 let mut new_list = vec![];
                 for e in list {
                     new_list.push(fv.apply(vec![e.to_owned()], engine)?);
                 }
-                Ok(Value::List(new_list))
+                Ok(Value::List(engine.lists.make(new_list)))
             }},
             value: None
         }),
@@ -66,7 +53,35 @@ pub fn get_global() -> HashMap<String, Value> {
                 Ok(Value::String(line))
             }},
             value: None
-        })
+        }),
+        ("markNsweep".to_string(), Value::BuiltInFunction { 
+            fun: BuiltInFunction { arity: 0, fun: |_, engine| {
+                engine.mark_and_sweep();
+                Ok(Value::Nothing)
+            }},
+            value: None
+        }),
+        ("showLists".to_string(), Value::BuiltInFunction { 
+            fun: BuiltInFunction { arity: 0, fun: |_, engine| {
+                dbg!(&engine.lists.values);
+                Ok(Value::Nothing)
+            }},
+            value: None
+        }),
+        ("showTypes".to_string(), Value::BuiltInFunction { 
+            fun: BuiltInFunction { arity: 0, fun: |_, engine| {
+                dbg!(&engine.types.values);
+                Ok(Value::Nothing)
+            }},
+            value: None
+        }),
+        ("showModules".to_string(), Value::BuiltInFunction { 
+            fun: BuiltInFunction { arity: 0, fun: |_, engine| {
+                dbg!(&engine.modules.values);
+                Ok(Value::Nothing)
+            }},
+            value: None
+        }),
     ]);
 
     global
@@ -81,6 +96,7 @@ pub fn integer_type() -> Type {
                 let Value::List(list) = &values[1] else {
                     return Err((format!("Expected `List` as second argument, not `{ty}`", ty = values[1].ty()), None));
                 };
+                let list = engine.lists.get(list).clone();
                 for _ in 0..v {
                     values[0].apply(list.clone(), engine)?;
                 }
@@ -182,16 +198,18 @@ pub fn list_type() -> Type {
     Type::BuiltInDef { 
         members: vec![], 
         builtin_methods: HashMap::from([
-            (String::from("index"), BuiltInFunction { arity: 1, fun: |values, _| {
+            (String::from("index"), BuiltInFunction { arity: 1, fun: |values, engine| {
                 let Value::List(list) = values.last().unwrap() else {unreachable!()};
+                let list = engine.lists.get(list);
                 let index_value = values[0].as_integer().map_err(|err| (err, None))? as usize;
                 if index_value >= list.len() {
                     return Err((format!("Index out of bounds."), None))
                 }
                 Ok(list[index_value].clone())
             }}),
-            (String::from("len"), BuiltInFunction { arity: 0, fun: |values, _| {
+            (String::from("len"), BuiltInFunction { arity: 0, fun: |values, engine| {
                 let Value::List(list) = values.last().unwrap() else {unreachable!()};
+                let list = engine.lists.get(list);
                 Ok(Value::Integer(list.len() as i32))
             }}),
         ]), 

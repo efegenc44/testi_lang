@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::value::{
-    BuiltInFunction, Function
+    BuiltInFunction
 };
 
 pub const INTEGER_TYPE_ID  : usize = 0;
@@ -17,15 +17,21 @@ pub const TYPE_TYPE_ID     : usize = 9;
 pub const MODULE_TYPE_ID   : usize = 10;
 pub const CHARACTER_TYPE_ID: usize = 11;
 
-
+#[derive(Clone)]
 pub enum Type {
     Def {
         members: Vec<String>,
-        methods: HashMap<String, Function>,
+        methods: HashMap<String, usize>,
     },
     BuiltInDef {
         members: Vec<String>,
-        methods: HashMap<String, Function>,
+        methods: HashMap<String, usize>,
         builtin_methods: HashMap<String, BuiltInFunction>,
+    }
+}
+
+impl std::fmt::Debug for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "")
     }
 }

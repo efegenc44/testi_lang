@@ -60,26 +60,71 @@ pub enum State {
     Ok
 }
 
-type Context = HashMap<String, Value>;
-type Types = HashMap<usize, Type>;
-type Modules = HashMap<usize, Context>;
-type Impls = HashMap<String, Vec<value::Function>>;
+pub struct Table<T> {
+    pub values: HashMap<usize, T>,
+    pub current_id: usize,
+    pub free_ids: Vec<usize>,
+    pub marked: HashSet<usize>
+}
+
+impl<T: Clone> Table<T> {
+    fn new() -> Self {
+        Self { values: HashMap::new(), current_id: 0, free_ids: vec![], marked: HashSet::new() }
+    }
+
+    pub fn get_id(&mut self) -> usize {
+        self.free_ids.last()
+            .and_then(|id| Some(*id))
+            .unwrap_or_else(|| {
+                let id = self.current_id;
+                self.current_id += 1;
+                id
+            })
+    }
+
+    pub fn get(&self, id: &usize) -> &T {
+        self.values.get(id).unwrap()
+    }
+
+    pub fn get_mut(&mut self, id: &usize) -> &mut T {
+        self.values.get_mut(id).unwrap()
+    }
+
+    pub fn make(&mut self, value: T) -> usize {
+        let id = self.get_id();
+        self.values.insert(id, value);
+        id
+    }
+
+    fn sweep(&mut self) {
+        for id in self.values.clone().keys() {
+            if self.marked.contains(id) {
+                self.marked.remove(id);
+            } else {
+                self.values.remove(id);
+            }
+        }
+    }
+
+} 
+
+type Context  = HashMap<String, Value>;
+type Impls    = HashMap<String, Vec<usize>>;
+type List     = Vec<Value>;
+type Map      = HashMap<value::KeyValue, Value>;
+type Instance = HashMap<String, Value>;
 pub struct Engine {
     ctx: Vec<Context>,
     
-    types: Types,
-    type_id: usize,
-    free_type_ids: Vec<usize>,
-
-    modules: Modules,
-    module_id: usize,
-    free_module_ids: Vec<usize>,
+    pub types    : Table<Type>,
+    pub modules  : Table<Context>,
+    pub lists    : Table<List>,
+    pub maps     : Table<Map>,
+    pub instances: Table<Instance>,
+    pub functions: Table<value::Function>,
 
     impls: Impls,
-
-    types_to_collect: Vec<HashSet<usize>>,
     impls_to_collect: Vec<HashSet<String>>,
-    modules_to_collect: Vec<HashSet<usize>>
 }
 
 impl Engine {
@@ -87,53 +132,55 @@ impl Engine {
         let mut engine = Self { 
             ctx: vec![get_global()], 
 
-            types: Types::new(),
-            type_id: 12,
-            free_type_ids: vec![],
-
-            modules: Modules::new(),
-            module_id: 0,
-            free_module_ids: vec![],
+            types    : Table::new(),
+            modules  : Table::new(),
+            lists    : Table::new(),
+            maps     : Table::new(),
+            instances: Table::new(),
+            functions: Table::new(),
 
             impls: Impls::new(),
-
-            types_to_collect: vec![HashSet::new()],
             impls_to_collect: vec![HashSet::new()],
-            modules_to_collect: vec![HashSet::new()],
         };
         engine.init_builtin_types();
+        engine.types.current_id = 12;
         engine
     }
 
     fn init_builtin_types(&mut self) {
-        self.types.insert(FUNCTION_TYPE_ID, function_type());
-        self.types.insert(INTEGER_TYPE_ID, integer_type());
-        self.types.insert(STRING_TYPE_ID, string_type());
-        self.types.insert(RANGE_TYPE_ID, range_type());
-        self.types.insert(BOOL_TYPE_ID, bool_type());
-        self.types.insert(LIST_TYPE_ID, list_type());
-        self.types.insert(NOTHING_TYPE_ID, nothing_type());
+        self.types.values.insert(FUNCTION_TYPE_ID, function_type());
+        self.types.values.insert(INTEGER_TYPE_ID, integer_type());
+        self.types.values.insert(STRING_TYPE_ID, string_type());
+        self.types.values.insert(RANGE_TYPE_ID, range_type());
+        self.types.values.insert(BOOL_TYPE_ID, bool_type());
+        self.types.values.insert(LIST_TYPE_ID, list_type());
+        self.types.values.insert(NOTHING_TYPE_ID, nothing_type());
+    }
+
+    pub fn mark_and_sweep(&mut self) {
+        // mark
+        for scope in self.ctx.clone() {
+            for value in scope.values() {
+                value.mark(self);
+            }
+        }
+
+        // sweep
+        self.types    .sweep();
+        self.modules  .sweep();
+        self.lists    .sweep();
+        self.maps     .sweep();
+        self.instances.sweep();
+        self.functions.sweep();
     }
 
     pub fn enter_scope(&mut self) {
         self.ctx.push(Context::new());
-        self.types_to_collect.push(HashSet::new());
         self.impls_to_collect.push(HashSet::new());
-        self.modules_to_collect.push(HashSet::new());
     }
 
     pub fn exit_scope(&mut self) {
         self.ctx.pop();
-        
-        for id in self.types_to_collect.pop().unwrap() {
-            self.types.remove(&id);
-            self.free_type_ids.push(id);
-        }
-
-        for id in self.modules_to_collect.pop().unwrap() {
-            self.modules.remove(&id);
-            self.free_module_ids.push(id);
-        }
         
         for impl_name in self.impls_to_collect.pop().unwrap() {
             let list = self.impls.get_mut(&impl_name).unwrap();
@@ -145,38 +192,12 @@ impl Engine {
         }
     }
 
-    pub fn get_id(&mut self) -> usize {
-        self.free_type_ids.last()
-            .and_then(|id| Some(*id))
-            .unwrap_or_else(|| {
-                let id = self.type_id;
-                self.type_id += 1;
-                id
-            })
-    }
+    
 
-    pub fn get_module_id(&mut self) -> usize {
-        self.free_module_ids.last()
-            .and_then(|id| Some(*id))
-            .unwrap_or_else(|| {
-                let id = self.module_id;
-                self.module_id += 1;
-                id
-            })
-    }
-
-    pub fn get_type(&self, id: usize) -> &Type {
-        self.types.get(&id).unwrap()
-    }
-
-    pub fn get_type_mut(&mut self, id: usize) -> &mut Type {
-        self.types.get_mut(&id).unwrap()
-    }
-
-    pub fn get_impl(&self, name: &str) -> Option<value::Function> {
+    pub fn get_impl(&self, name: &str) -> Option<&usize> {
         self.impls.get(name)
             .and_then(|list| list.last())
-            .and_then(|f| Some(f.clone()))
+            .and_then(|id| Some(id))
     }
 
     pub fn define(&mut self, var: String, val: Value) {
@@ -206,21 +227,23 @@ impl Engine {
     pub fn collect_definitions(&mut self, stmts: &Vec<Spanned<Stmt>>) -> Res<()> {
         for stmt in stmts {
             match &stmt.data {
-                Stmt::Function(stmt::Function { name, args, body }) =>
+                Stmt::Function(stmt::Function { name, args, body }) => {
+                    let id = self.functions.make(value::Function { 
+                        args: args.clone(), body: body.clone() 
+                    });
                     self.define(name.to_string(), Value::Function {
-                        fun: value::Function { 
-                            args: args.clone(), body: body.clone() 
-                        },
+                        id,
                         value: None,
                         closure: None,
-                    }),
-                
+                    })
+                }
+
                 Stmt::Def { name, members, methods } => {
-                    let id = self.get_id();
-                    self.types.insert(id, Type::Def { 
-                        members: members.to_owned(), methods: methods.iter().map(Into::into).collect() 
+                    let id = self.types.make(Type::Def { 
+                        members: members.to_owned(), methods: methods.iter().map(|method| {
+                            (method.data.name.clone(), self.functions.make(method.into()))
+                        }).collect() 
                     });
-                    self.types_to_collect.last_mut().unwrap().insert(id);
                     self.define(name.to_string(), Value::Type(id));
                 }
                 
@@ -228,7 +251,7 @@ impl Engine {
                     self.impls_to_collect.last_mut().unwrap().insert(name.clone());
                     self.impls.entry(name.to_string())
                         .or_insert(vec![])
-                        .push(value::Function { args: args.clone(), body: body.clone() });
+                        .push(self.functions.make(value::Function { args: args.clone(), body: body.clone() }));
                 }
 
                 _ => (),
@@ -260,17 +283,12 @@ impl Engine {
                 Err(err) => simple_error(err, assignee.span),
             },
             
-            Expr::Index { from, index_expr } =>
-                handle(handle(self.eval(from)?.indexable(), from.span)?
-                    .replace(self.eval(index_expr)?, val), index_expr.span),
+            Expr::Index { from: _, index_expr: _ } =>
+                unimplemented!(),
 
-            Expr::Access { from, member } => {
-                let (type_name, mut members) = handle(self.eval(from)?.as_instance(), from.span)?;                
-                match members.insert(member.clone(), val) {
-                    Some(_) => Ok(Value::Instance { type_id: type_name, members }),
-                    None    => simple_error(format!("`{type_name}` has no member called `{member}`"), from.span),
-                }
-            }
+            Expr::Access { from: _, member: _ } => 
+                unimplemented!(),
+            
             _ => simple_error("Invalid assignment target.", assignee.span)
         }
     }
@@ -325,23 +343,18 @@ impl Engine {
                     }
                 };
 
-                let module = self.ctx.pop().unwrap();
-                let id = self.get_module_id();
-                self.modules.insert(id, module);
-                self.modules_to_collect.last_mut().unwrap().insert(id);
-                
-                // Because we don't exit the scope, we need to do it by hand.
-                self.modules_to_collect.pop();
-
+                let id = self.modules.make(self.ctx.pop().unwrap());
                 self.define(module_name, Value::Module(id))
             }
 
             Stmt::ImplFor { ty, mets } => {
                 let id = handle(handle(self.resolve(ty), stmt.span)?.as_type(), stmt.span)?;
-                match self.get_type_mut(id) {
+                match self.types.get_mut(&id) {
                     Type::Def        { methods, .. } |
                     Type::BuiltInDef { methods, .. } => {
-                        let mets: HashMap<_, _> = mets.iter().map(Into::into).collect();
+                        let mets: HashMap<_, _> = mets.iter().map(|method| {
+                            (method.data.name.clone(), self.functions.make(method.into()))
+                        }).collect();
                         methods.extend(mets);
                     }
                 }
@@ -358,10 +371,11 @@ impl Engine {
                     closure_map.insert(var.to_string(), handle(self.resolve(var), stmt.span)?);
                 }
                 
+                let id = self.functions.make(value::Function { 
+                    args: args.clone(), body: body.clone() 
+                });
                 self.define(name.to_string(), Value::Function { 
-                    fun: value::Function { 
-                        args: args.clone(), body: body.clone() 
-                    },
+                    id,
                     value: None, 
                     closure: Some(closure_map) 
                 });
@@ -467,13 +481,13 @@ impl Engine {
             Expr::Access { from, member } => {
                 let value = self.eval(from)?;
                 match &value {
-                    Value::Instance { members, .. } =>
-                        if let Some(val) = members.get(member) {
+                    Value::Instance { id, .. } =>
+                        if let Some(val) = self.instances.get(id).get(member) {
                             return Ok(val.clone())
                         }
                     
                     Value::Module(id) => {
-                        let Some(value) = self.modules.get(id).unwrap().get(member) else {
+                        let Some(value) = self.modules.get(id).get(member) else {
                             return simple_error(format!("`Module` has no member, nor method called `{member}`"), from.span)
                         };
                         return Ok(value.clone())
@@ -498,9 +512,9 @@ impl Engine {
                 };
                 
                 Ok(Value::Function { 
-                    fun: value::Function { 
+                    id: self.functions.make(value::Function { 
                         args: args.to_owned(), body: body.to_owned()
-                    },
+                    }),
                     value: None,
                     closure: closure_map,
                 })
@@ -514,7 +528,7 @@ impl Engine {
                     .iter()
                     .map(|e| self.eval(e))
                     .collect();
-                Ok(Value::List(list?))
+                Ok(Value::List(self.lists.make(list?)))
             },
             
             Expr::Map(pairs) => {
@@ -522,7 +536,7 @@ impl Engine {
                 for (key, value) in pairs {
                     map.insert(handle(self.eval(key)?.try_into(), key.span)?, self.eval(value)?);
                 }
-                Ok(Value::Map(map))
+                Ok(Value::Map(self.maps.make(map)))
             },
             
             Expr::Natural(nat) => Ok(Value::Integer(*nat as i32)),

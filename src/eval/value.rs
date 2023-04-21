@@ -66,13 +66,13 @@ pub struct Function {
     pub body: Vec<Spanned<Stmt>>,
 }
 
-impl Into<(String, Function)> for &Spanned<stmt::Function> {
-    fn into(self) -> (String, Function) {
+impl Into<Function> for &Spanned<stmt::Function> {
+    fn into(self) -> Function {
         let data = self.clone().data;
-        (data.name, Function {
+        Function {
             args: data.args,
             body: data.body,
-        })
+        }
     }
 } 
 
@@ -83,14 +83,14 @@ pub enum Value {
     String(String),
     Char(char),
     Bool(bool),
-    List(Vec<Value>),
-    Map(HashMap<KeyValue, Value>),
+    List(usize),
+    Map(usize),
     Instance {
         type_id: usize, 
-        members: HashMap<String, Value>,
+        id: usize,
     },
     Function {
-        fun: Function,
+        id: usize,
         value: Option<Box<Value>>, // If Method
         closure: Option<HashMap<String, Value>> // If Closure
     },
@@ -106,53 +106,14 @@ pub enum Value {
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Integer(int)    => write!(f, "{int}"),
-            Value::Float(float)    => write!(f, "{float}"),
-            Value::String(s)       => write!(f, "{s}"),
-            Value::Char(ch)        => write!(f, "{ch}"),
-            Value::Bool(b)         => write!(f, "{b}"),
-            Value::List(list)      => {
-                if list.len() == 0 {
-                    return write!(f, "[]")
-                }
-                write!(f, "[")?;
-                write!(f, "{f}", f = list.first().unwrap())?;
-                for value in &list[1..] {
-                    write!(f, ", {value}")?;
-                }
-                write!(f, "]")?;
-                Ok(())
-            },
-            Value::Map(map) => {
-                if map.len() == 0 {
-                    return write!(f, "#[]")
-                }
-                let mut first = true;
-                write!(f, "#[")?;
-                for (key, value) in map {
-                    if first {
-                        write!(f, "{key}: {value}")?;
-                        first = false;
-                    } else {
-                        write!(f, ", {key}: {value}")?;
-                    }
-                }
-                write!(f, "]")?;
-                Ok(())
-            },
-            Value::Instance { type_id, members } => {
-                write!(f, "{type_id} ")?;
-                let mut first = true;
-                for (key, value) in members {
-                    if first {
-                        write!(f, "{key}: {value}")?;
-                        first = false;
-                    } else {
-                        write!(f, ", {key}: {value}")?;
-                    }
-                }
-                Ok(())
-            },
+            Value::Integer(int) => write!(f, "{int}"),
+            Value::Float(float) => write!(f, "{float}"),
+            Value::String(s)    => write!(f, "{s}"),
+            Value::Char(ch)     => write!(f, "{ch}"),
+            Value::Bool(b)      => write!(f, "{b}"),
+            Value::List(list)   => write!(f, "{list}"),
+            Value::Map(map)     => write!(f, "{map}"),
+            Value::Instance { type_id, id } => write!(f, "{type_id};{id}"),
             Value::Function {..}        => write!(f, "<function>"),
             Value::BuiltInFunction {..} => write!(f, "<built-in function>"),
             Value::Nothing            => write!(f, "nothing"),
@@ -204,13 +165,6 @@ impl Value {
         }
     }
 
-    pub fn as_char(&self) -> Result<char, String> {
-        match self {
-            Value::Char(ch) => Ok(*ch),
-            _ => Err(format!("Expected Character, got {}.", self.ty()))
-        }
-    }
-
     pub fn as_bool(&self) -> Result<bool, String> {
         match self {
             Value::Bool(b) => Ok(*b),
@@ -224,82 +178,74 @@ impl Value {
             _ => Err(format!("Expected Type, got {}.", self.ty()))
         }
     }
-
-    pub fn as_instance(&self) -> Result<(usize, HashMap<String, Value>), String> {
-        match self {
-            Value::Instance { type_id, members } => Ok((*type_id, members.clone())),
-            _ => Err(format!("Expected a `Definition`, got {}.", self.ty()))
-        }
-    }
 }
 
-pub type ExprResult = Result<Value, String>;
-
 impl Value {
-    pub fn indexable(self) -> ExprResult {
+    pub fn mark(&self, engine: &mut Engine) {
         match self {
-            Value::String(_) |
-            Value::List(_)   |
-            Value::Map(_)    => Ok(self),
-            _ => Err(format!("`{ty}` is not indexable.", ty = self.ty()))
-        }
-    }
-
-    pub fn replace(&self, index: Value, val: Value) -> ExprResult {
-        match self {
-            Value::String(s)  => {
-                let index = index.as_integer()?;
-                let index = if index < 0 {
-                    s.len() as i32 + index
-                } else {
-                    index
-                };
-                let v = val.as_char()?; 
-                if s.len() < index as usize {
-                    return Err("Index out of bounds".to_string())
-                }
-                let s = s.chars().enumerate().map(|(i, ch)| {
-                    if i == index as usize { v } else { ch }
-                }).collect();
-                Ok(Value::String(s))
-            },
-            Value::List(list) => {
-                let index = index.as_integer()?;
-                let index = if index < 0 {
-                    list.len() as i32 + index
-                } else {
-                    index
-                };
-                let mut list = list.clone();
-                match list.get_mut(index as usize) {
-                    Some(v) => {
-                        *v = val;
-                        Ok(Value::List(list))
-                    },
-                    None => Err("Index out of bounds.".to_string())
+            Value::List(id) => {
+                engine.lists.marked.insert(*id);
+                for value in engine.lists.get(id).clone() {
+                    value.mark(engine)
                 }
             },
-            Value::Map(map) => {
-                let key_value: KeyValue = match TryInto::try_into(index) {
-                    Ok(kv) => kv,
-                    Err(_) => return Err(format!("Invalid Key.").to_string()),
-                };
-                let mut map = map.clone();                
-                match map.insert(key_value.clone(), val) {
-                    Some(_) => Ok(Value::Map(map)),
-                    None => return Err(format!("Absent Key {key_value}.")),
+            
+            Value::Map(id) => {
+                engine.maps.marked.insert(*id);
+                for (_, value) in engine.maps.get(id).clone() {
+                    value.mark(engine)
                 }
+            },
+            
+            Value::Instance { type_id, id } => {
+                engine.types.marked.insert(*type_id);
+                engine.instances.marked.insert(*id);
+                for (_, value) in engine.instances.get(id).clone() {
+                    value.mark(engine)
+                }
+            },
+            
+            Value::Function { id, value, closure } => {
+                engine.functions.marked.insert(*id);
+                if let Some(value) = value {
+                    value.mark(engine);
+                }
+                if let Some(closure) = closure {
+                    for (_, value) in closure{
+                        value.mark(engine);
+                    }
+                }
+            },
+            
+            Value::BuiltInFunction { fun: _, value } => 
+                if let Some(value) = value {
+                    value.mark(engine);
+                },
+            
+            Value::Type(id) => {
+                engine.types.marked.insert(*id);
+                
+                let (Type::Def        { methods, .. }|
+                     Type::BuiltInDef { methods, .. }) = engine.types.get(id);
+                
+                for method in methods.values() {
+                    engine.functions.marked.insert(*method);
+                }
+            },
+            
+            Value::Module(id) => {
+                engine.modules.marked.insert(*id);
             }
-            _ => unreachable!()
+            _ => ()
         }
     }
-
+    
     pub fn get_method(&self, method: &str, engine: &mut Engine) -> Result<Value, String> {
-        match engine.get_type(self.ty()) {
+        match engine.types.get(&self.ty()) {
             Type::Def { methods, .. } => {
                 if let Some(method) = methods.get(method) {
                     return Ok(Value::Function { 
-                        fun: method.clone(), 
+                        id: *method, 
                         value: Some(Box::new(self.clone())),
                         closure: None
                     })
@@ -315,7 +261,7 @@ impl Value {
 
                 if let Some(method) = methods.get(method) {
                     return Ok(Value::Function { 
-                        fun: method.clone(),
+                        id: *method,
                         value: Some(Box::new(self.clone())), 
                         closure: None
                     })
@@ -328,7 +274,7 @@ impl Value {
         };
 
         Ok(Value::Function { 
-            fun: method, 
+            id: *method, 
             value: Some(Box::new(self.clone())), 
             closure: None 
         })
@@ -352,7 +298,9 @@ impl Value {
         }; 
 
         match self {
-            Value::Function { fun: Function { args, body }, value: self_value, closure } => {
+            Value::Function { id, value: self_value, closure } => {
+                let Function { args, body } = engine.functions.get(id).clone();
+                
                 check_arity(args.len())?;                
                 if body.is_empty() {
                     return Ok(Value::Nothing)
@@ -372,7 +320,7 @@ impl Value {
                     }
                 }
                 
-                handle(engine.collect_definitions(body))?;
+                handle(engine.collect_definitions(&body))?;
                 for (arg, v) in std::iter::zip(args, vals) {
                     engine.define(arg.to_string(), v);
                 }
@@ -406,15 +354,15 @@ impl Value {
                 (fun.fun)(vals, engine)
             }
                 
-            Value::Type(id) => {
+            Value::Type(type_id) => {
                 let (Type::Def       { members, .. }| 
-                    Type::BuiltInDef { members, .. }) = engine.get_type(*id);
+                    Type::BuiltInDef { members, .. }) = engine.types.get(type_id);
                 check_arity(members.len())?;
                 let mut map = HashMap::new(); 
                 for (member, v) in std::iter::zip(members, vals) {
                     map.insert(member.to_string(), v);
                 }
-                Ok(Value::Instance { type_id: *id, members: map })
+                Ok(Value::Instance { type_id: *type_id, id: engine.instances.make(map) })
             },
             _ => Err((format!("`{ty}` is not applicable.", ty = self.ty()), None))
         }
