@@ -17,7 +17,6 @@ pub const TYPE_TYPE_ID     : usize = 9;
 pub const MODULE_TYPE_ID   : usize = 10;
 pub const CHARACTER_TYPE_ID: usize = 11;
 
-#[derive(Clone)]
 pub enum Type {
     Def {
         members: Vec<String>,

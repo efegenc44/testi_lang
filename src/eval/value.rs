@@ -181,37 +181,51 @@ impl Value {
 }
 
 impl Value {
-    pub fn mark(&self, engine: &mut Engine) {
+    // Contrary to what it says as "unsafe" this function is quite safe.
+    // Because that we don't mutate the things we iterate over,
+    // there is ackchyually (🤓) no danger to mutably reference the Engine
+    // again in the iteration body (i guess that is what happens), but because 
+    // Rust Borrow Checker doesn't allow us to do that, we use UNSAFE 😨.
+    // I couldn't come up with a better solution, sorry guys 😞 
+    pub unsafe /* 😨 */ fn mark(&self, engine: *mut Engine) {
         match self {
             Value::List(id) => {
-                engine.lists.marked.insert(*id);
-                for value in engine.lists.get(id).clone() {
+                (*engine).lists.marked.insert(*id);
+                for value in (*engine).lists.get(id) {
                     value.mark(engine)
                 }
             },
             
             Value::Map(id) => {
-                engine.maps.marked.insert(*id);
-                for (_, value) in engine.maps.get(id).clone() {
+                (*engine).maps.marked.insert(*id);
+                for value in (*engine).maps.get(id).values() {
                     value.mark(engine)
                 }
             },
             
             Value::Instance { type_id, id } => {
-                engine.types.marked.insert(*type_id);
-                engine.instances.marked.insert(*id);
-                for (_, value) in engine.instances.get(id).clone() {
+                (*engine).types.marked.insert(*type_id);
+                
+                let (Type::Def        { methods, .. }|
+                     Type::BuiltInDef { methods, .. }) = (*engine).types.get(id);
+                
+                for method in methods.values() {
+                    (*engine).functions.marked.insert(*method);
+                }
+                
+                (*engine).instances.marked.insert(*id);
+                for value in (*engine).instances.get(id).values() {
                     value.mark(engine)
                 }
             },
             
             Value::Function { id, value, closure } => {
-                engine.functions.marked.insert(*id);
+                (*engine).functions.marked.insert(*id);
                 if let Some(value) = value {
                     value.mark(engine);
                 }
                 if let Some(closure) = closure {
-                    for (_, value) in closure{
+                    for value in closure.values() {
                         value.mark(engine);
                     }
                 }
@@ -223,18 +237,18 @@ impl Value {
                 },
             
             Value::Type(id) => {
-                engine.types.marked.insert(*id);
+                (*engine).types.marked.insert(*id);
                 
                 let (Type::Def        { methods, .. }|
-                     Type::BuiltInDef { methods, .. }) = engine.types.get(id);
+                     Type::BuiltInDef { methods, .. }) = (*engine).types.get(id);
                 
                 for method in methods.values() {
-                    engine.functions.marked.insert(*method);
+                    (*engine).functions.marked.insert(*method);
                 }
             },
             
             Value::Module(id) => {
-                engine.modules.marked.insert(*id);
+                (*engine).modules.marked.insert(*id);
             }
             _ => ()
         }

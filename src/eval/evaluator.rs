@@ -67,7 +67,7 @@ pub struct Table<T> {
     pub marked: HashSet<usize>
 }
 
-impl<T: Clone> Table<T> {
+impl<T> Table<T> {
     fn new() -> Self {
         Self { values: HashMap::new(), current_id: 0, free_ids: vec![], marked: HashSet::new() }
     }
@@ -97,11 +97,18 @@ impl<T: Clone> Table<T> {
     }
 
     fn sweep(&mut self) {
-        for id in self.values.clone().keys() {
+        let ptr_to_table = self as *mut Table<T>;  
+
+        for id in self.values.keys() {
             if self.marked.contains(id) {
                 self.marked.remove(id);
             } else {
-                self.values.remove(id);
+                // Because we're removing the values we currently look,
+                // it's safe to continue to iterate, we have no chance to
+                // encounter them again (at least i think that is what happens)
+                unsafe /* 😨 */ {
+                    (*ptr_to_table).values.remove(id);
+                }
             }
         }
     }
@@ -159,9 +166,12 @@ impl Engine {
 
     pub fn mark_and_sweep(&mut self) {
         // mark
-        for scope in self.ctx.clone() {
+        let dont_try_this_at_home = self as *mut Engine;
+        for scope in &self.ctx {
             for value in scope.values() {
-                value.mark(self);
+                unsafe /* 😨 */ {
+                    value.mark(dont_try_this_at_home)
+                }
             }
         }
 
@@ -191,8 +201,6 @@ impl Engine {
             }
         }
     }
-
-    
 
     pub fn get_impl(&self, name: &str) -> Option<&usize> {
         self.impls.get(name)
