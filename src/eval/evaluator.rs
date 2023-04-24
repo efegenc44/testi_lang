@@ -402,12 +402,24 @@ impl Engine {
                     let i = handle(self.eval(&iter)?.get_method("step", self), iter.span.clone())?
                                 .apply(vec![Value::Integer(step)], self)
                                 .map_err(|(err, inner_err)| Error::new(err, iter.span.clone(), inner_err))?;
-                    if let Value::Nothing = i {
-                        break
+                    let Value::List(list) = i else {
+                        return simple_error("Step should return a 2-tuple", iter.span.clone())
+                    };
+
+                    let list = self.lists.get(&list);
+                    if list.len() != 2 {
+                        return simple_error("Step should return a 2-tuple", iter.span.clone())
                     }
+
+                    let mut quit = false;
+                    if let Value::Bool(false) = list[1] {
+                        quit = true;
+                    }
+                    let iter_value = list[0].clone(); 
+
                     self.enter_scope();
                     self.collect_definitions(body)?;
-                    self.define(var.to_string(), i);
+                    self.define(var.to_string(), iter_value);
                     for stmt in body {
                         match self.run(stmt)? {
                             res @ State::Return(_) => {
@@ -420,6 +432,9 @@ impl Engine {
                         }
                     }
                     self.exit_scope();
+                    if quit {
+                        break;
+                    }
                 }
             },
             
