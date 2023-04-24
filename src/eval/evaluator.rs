@@ -1,7 +1,7 @@
 use std::collections::{ HashMap, HashSet };
 
 use crate::{
-    error::{error::{ Error, Res, simple_error, handle }, reporter::Repoter},
+    error::error::{ Error, Res, simple_error, handle },
     ast::{
         stmt::{Stmt, self},
         expr::{
@@ -288,7 +288,7 @@ impl Engine {
         match &assignee.data {
             Expr::Variable(var) => match self.redefine(&var, val.clone()) {
                 Ok(())   => Ok(val),
-                Err(err) => simple_error(err, assignee.span),
+                Err(err) => simple_error(err, assignee.span.clone()),
             },
             
             Expr::Index { from: _, index_expr: _ } =>
@@ -297,7 +297,7 @@ impl Engine {
             Expr::Access { from: _, member: _ } => 
                 unimplemented!(),
             
-            _ => simple_error("Invalid assignment target.", assignee.span)
+            _ => simple_error("Invalid assignment target.", assignee.span.clone())
         }
     }
     
@@ -315,39 +315,26 @@ impl Engine {
                 path.push_str(".testi");
                 
                 let file = std::fs::read_to_string(&path).expect("Error reading a file.");
-                let mut reporter = Repoter::new(&path, &file);
                 
-                let tokens = match Lexer::new(&file).collect() {
+                let tokens = match Lexer::new(path, &file).collect() {
                     Ok(tokens) => tokens,
-                    Err(err)   => {
-                        reporter.report(err, "tokenizing");
-                        std::process::exit(1);
-                    },
+                    Err(err)   => return Err(Error::new("Error Importing file", stmt.span.clone(), Some(err))),
                 };
 
                 let stmts: Vec<_> = match Parser::new(tokens).collect() {
                     Ok(stmts) => stmts,
-                    Err(err)  => {
-                        reporter.report(err, "parsing");
-                        std::process::exit(1);
-                    },
+                    Err(err)  => return Err(Error::new("Error Importing file", stmt.span.clone(), Some(err))),
                 };
 
                 self.enter_scope();
                 match self.collect_definitions(&stmts) {
                     Ok(_)    => (),
-                    Err(err) => {
-                        reporter.report(err, "runtime");
-                        std::process::exit(1);
-                    }
+                    Err(err) => return Err(Error::new("Error Importing file", stmt.span.clone(), Some(err))),
                 }
-                for stmt in &stmts {
-                    match self.run(&stmt) {
+                for stmtt in &stmts {
+                    match self.run(&stmtt) {
                         Ok(_)    => (),
-                        Err(err) => {
-                            reporter.report(err, "runtime");
-                            std::process::exit(1);
-                        }
+                        Err(err) => return Err(Error::new("Error Importing file", stmt.span.clone(), Some(err))),
                     }
                 };
 
@@ -356,7 +343,7 @@ impl Engine {
             }
 
             Stmt::ImplFor { ty, mets } => {
-                let id = handle(handle(self.resolve(ty), stmt.span)?.as_type(), stmt.span)?;
+                let id = handle(handle(self.resolve(ty), stmt.span.clone())?.as_type(), stmt.span.clone())?;
                 match self.types.get_mut(&id) {
                     Type::Def        { methods, .. } |
                     Type::BuiltInDef { methods, .. } => {
@@ -376,7 +363,7 @@ impl Engine {
             Stmt::Closure { fun: stmt::Function { name, args, body }, closure } => {
                 let mut closure_map = HashMap::with_capacity(closure.len());
                 for var in closure {
-                    closure_map.insert(var.to_string(), handle(self.resolve(var), stmt.span)?);
+                    closure_map.insert(var.to_string(), handle(self.resolve(var), stmt.span.clone())?);
                 }
                 
                 let id = self.functions.make(value::Function { 
@@ -391,7 +378,7 @@ impl Engine {
             
             Stmt::If { branches, elss } => {
                 for (cond, branch) in branches {
-                    if handle(self.eval(cond)?.as_bool(), cond.span)? {
+                    if handle(self.eval(cond)?.as_bool(), cond.span.clone())? {
                         return self.run_block(branch)
                     }
                 }
@@ -401,7 +388,7 @@ impl Engine {
             },
             
             Stmt::While { cond, body } =>
-                while handle(self.eval(cond)?.as_bool(), cond.span)? {
+                while handle(self.eval(cond)?.as_bool(), cond.span.clone())? {
                     match self.run_block(body)? {
                         res @ State::Return(_) => return Ok(res),
                         State::Continue => continue,
@@ -412,9 +399,9 @@ impl Engine {
             
             Stmt::For { var, iter, body } => {
                 for step in 0.. {
-                    let i = handle(self.eval(&iter)?.get_method("step", self), iter.span)?
+                    let i = handle(self.eval(&iter)?.get_method("step", self), iter.span.clone())?
                                 .apply(vec![Value::Integer(step)], self)
-                                .map_err(|(err, inner_err)| Error::new(err, iter.span, inner_err))?;
+                                .map_err(|(err, inner_err)| Error::new(err, iter.span.clone(), inner_err))?;
                     if let Value::Nothing = i {
                         break
                     }
@@ -453,22 +440,22 @@ impl Engine {
                 let val = match op {
                     AssignOp::Normal => self.eval(e)?,
                     AssignOp::Composite(bop) => 
-                        handle(self.eval(assignee)?.get_method(&bop.get_method_name(), self), expr.span)?
+                        handle(self.eval(assignee)?.get_method(&bop.get_method_name(), self), expr.span.clone())?
                             .apply(vec![self.eval(&e)?], self)
-                            .map_err(|(err, inner_err)| Error::new(err, expr.span, inner_err))?
+                            .map_err(|(err, inner_err)| Error::new(err, expr.span.clone(), inner_err))?
                 };
                 self.assign(assignee, val)
             },
             
             Expr::Binary { op, left, right } => 
-                handle(self.eval(&left)?.get_method(&op.get_method_name(), self), expr.span)?
+                handle(self.eval(&left)?.get_method(&op.get_method_name(), self), expr.span.clone())?
                     .apply(vec![self.eval(&right)?], self)
-                    .map_err(|(err, inner_err)| Error::new(err, expr.span, inner_err)),
+                    .map_err(|(err, inner_err)| Error::new(err, expr.span.clone(), inner_err)),
             
             Expr::Unary { op, operand } => 
-                handle(self.eval(&operand)?.get_method(&op.get_method_name(), self), expr.span)?
+                handle(self.eval(&operand)?.get_method(&op.get_method_name(), self), expr.span.clone())?
                     .apply(vec![], self)
-                    .map_err(|(err, inner_err)| Error::new(err, expr.span, inner_err)),
+                    .map_err(|(err, inner_err)| Error::new(err, expr.span.clone(), inner_err)),
             
             Expr::Application { applied, exprs } => {
                 let values: Result<_, _> = exprs
@@ -478,13 +465,13 @@ impl Engine {
 
                 self.eval(applied)?
                     .apply(values?, self)
-                    .map_err(|(err, inner_err)| Error::new(err, expr.span, inner_err))
+                    .map_err(|(err, inner_err)| Error::new(err, expr.span.clone(), inner_err))
             },
             
             Expr::Index { from, index_expr } =>
-                handle(self.eval(from)?.get_method("index", self), from.span)?
+                handle(self.eval(from)?.get_method("index", self), from.span.clone())?
                     .apply(vec![self.eval(index_expr)?], self)
-                    .map_err(|(err, inner_err)| Error::new(err, expr.span, inner_err)),
+                    .map_err(|(err, inner_err)| Error::new(err, expr.span.clone(), inner_err)),
            
             Expr::Access { from, member } => {
                 let value = self.eval(from)?;
@@ -496,7 +483,7 @@ impl Engine {
                     
                     Value::Module(id) => {
                         let Some(value) = self.modules.get(id).get(member) else {
-                            return simple_error(format!("`Module` has no member, nor method called `{member}`"), from.span)
+                            return simple_error(format!("`Module` has no member, nor method called `{member}`"), from.span.clone())
                         };
                         return Ok(value.clone())
                     }
@@ -504,7 +491,7 @@ impl Engine {
                 }
                 match value.get_method(&member, self) {
                     Ok(met) => Ok(met),
-                    Err(_)  => simple_error(format!("`{ty}` has no member, nor method called `{member}`", ty = value.ty()), from.span),
+                    Err(_)  => simple_error(format!("`{ty}` has no member, nor method called `{member}`", ty = value.ty()), from.span.clone()),
                 }
             },
             
@@ -512,7 +499,7 @@ impl Engine {
                 let closure_map = if let Some(closure) = closure {
                     let mut closure_map = HashMap::with_capacity(closure.len());
                     for var in closure {
-                        closure_map.insert(var.to_string(), handle(self.resolve(var), expr.span)?);
+                        closure_map.insert(var.to_string(), handle(self.resolve(var), expr.span.clone())?);
                     }
                     Some(closure_map)
                 } else {
@@ -529,7 +516,7 @@ impl Engine {
             },
             
             Expr::TypeTest { expr: e, ty } => 
-                Ok(Value::Bool(self.eval(e)?.ty() == handle(self.eval(ty)?.as_type(), ty.span)?)),
+                Ok(Value::Bool(self.eval(e)?.ty() == handle(self.eval(ty)?.as_type(), ty.span.clone())?)),
             
             Expr::List(exprs) => {
                 let list: Result<_, _> = exprs
@@ -542,7 +529,7 @@ impl Engine {
             Expr::Map(pairs) => {
                 let mut map = HashMap::with_capacity(pairs.len());
                 for (key, value) in pairs {
-                    map.insert(handle(self.eval(key)?.try_into(), key.span)?, self.eval(value)?);
+                    map.insert(handle(self.eval(key)?.try_into(), key.span.clone())?, self.eval(value)?);
                 }
                 Ok(Value::Map(self.maps.make(map)))
             },
@@ -553,7 +540,7 @@ impl Engine {
             Expr::Char(ch) => Ok(Value::Char(*ch)),
             Expr::Bool(b) => Ok(Value::Bool(*b)),
             Expr::Nothing => Ok(Value::Nothing),
-            Expr::Variable(var) => Ok(handle(self.resolve(var), expr.span)?),
+            Expr::Variable(var) => Ok(handle(self.resolve(var), expr.span.clone())?),
         }
     }
 }

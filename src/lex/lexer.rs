@@ -6,6 +6,7 @@ use crate::{
 use super::token::Token::{ self, * };
 
 pub struct Lexer {
+    source_name: String,
     chars: Vec<char>,
     /// Absolute position 
     cursor: usize,  
@@ -23,10 +24,10 @@ impl Iterator for Lexer {
 }
 
 impl Lexer {
-    pub fn new(source: &str) -> Self {
+    pub fn new(source_name: String, source: &str) -> Self {
         let mut chars: Vec<_> = source.chars().collect();
         chars.push('\0');
-        Self { chars, cursor: 0, col: 1, row: 1 }
+        Self { source_name, chars, cursor: 0, col: 1, row: 1 }
     }
 
     fn peek(&self) -> char {
@@ -73,7 +74,7 @@ impl Lexer {
         if self.peek() == '\0' {
             return simple_error(
                 "Unterminated string literal.", 
-                Span::new(first_line, self.row, start, self.col)
+                Span::new(self.source_name.clone(), first_line, self.row, start, self.col)
             )
         }
         let range = string_start..self.cursor;
@@ -134,7 +135,7 @@ impl Lexer {
     }
 
     fn spanned(&self, token: Token, start: usize) -> Option<Res<Spanned<Token>>> {
-        Some(Ok(Spanned::new(token, Span::new(self.row, self.row, start, self.col))))
+        Some(Ok(Spanned::new(token, Span::new(self.source_name.clone(), self.row, self.row, start, self.col))))
     }
     
     fn next_token(&mut self) -> Option<Res<Spanned<Token>>> {
@@ -243,7 +244,7 @@ impl Lexer {
             ' ' => return self.next_token(),
             _   => return Some(simple_error(
                 format!("Unknown start of token `{ch}`"),
-                Span::new(self.row, self.row, start, self.col)
+                Span::new(self.source_name.clone(), self.row, self.row, start, self.col)
             ))
         };
         self.spanned(token, start)

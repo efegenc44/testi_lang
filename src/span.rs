@@ -1,5 +1,6 @@
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Span {
+    pub source_name: String,
     pub first_line: usize, 
     pub last_line : usize,
     pub start     : usize, 
@@ -7,12 +8,15 @@ pub struct Span {
 }
 
 impl Span {
-    pub fn new(first_line: usize, last_line: usize, start: usize, end: usize) -> Self {
-        Self { first_line, last_line, start, end }
+    pub fn new(source_name: String, first_line: usize, last_line: usize, start: usize, end: usize) -> Self {
+        Self { source_name, first_line, last_line, start, end }
     }
 
-    pub fn extend(&self, other: Span) -> Span {
+    pub fn extend(&self, other: &Span) -> Span {
+        assert!(&self.source_name == &other.source_name);
+
         Span::new(
+            self.source_name.clone(),
             self.first_line, 
             other.last_line, 
             self.start, 

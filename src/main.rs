@@ -15,9 +15,9 @@ use error::reporter::Repoter;
 
 fn run_from_file(path: &String) -> io::Result<()> {
     let file = fs::read_to_string(path).expect("Error reading a file.");
-    let mut reporter = Repoter::new(path, &file);
+    let mut reporter = Repoter::new();
     
-    let tokens = match Lexer::new(&file).collect() {
+    let tokens = match Lexer::new(path.clone(), &file).collect() {
         Ok(tokens) => tokens,
         Err(err)   => {
             reporter.report(err, "tokenizing");

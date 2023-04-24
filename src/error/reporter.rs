@@ -1,19 +1,16 @@
-use std::ops::Range;
+use std::{ops::Range, collections::HashMap};
 
 use crate::span::Span;
 
 use super::error::Error;
 
-pub struct Repoter<'a> 
-{
-    source_name: &'a str,
-    lines: std::str::Lines<'a>
+pub struct Repoter {
+    lineses: HashMap<String, String>
 }
 
-impl<'a> Repoter<'a> 
-{
-    pub fn new(source_name: &'a str, source: &'a str) -> Self {
-        Self { source_name, lines: source.lines() }
+impl Repoter {
+    pub fn new() -> Self {
+        Self { lineses: HashMap::new() }
     }
     
     fn print_multiple(s: &str, range: Range<usize>) {
@@ -24,12 +21,20 @@ impl<'a> Repoter<'a>
 
     // TODO: Refactor 
     pub fn report(&mut self, err: Error, stage: &str) {
-        let Span { first_line, last_line, start, end } = err.span;
+        let Span { source_name, first_line, last_line, start, end } = err.span;
 
-        eprintln!("\n  Error | [{source_name}:{first_line}:{start}] (at {stage})", source_name = self.source_name); 
+        let lines = if self.lineses.contains_key(&source_name) {
+            self.lineses.get(&source_name).unwrap().lines()
+        } else {
+            let file = std::fs::read_to_string(&source_name).expect("Error reading a file.");
+            self.lineses.insert(source_name.clone(), file);
+            self.lineses.get(&source_name).unwrap().lines()
+        };
+
+        eprintln!("\n  Error | [{source_name}:{first_line}:{start}] (at {stage})"); 
         eprintln!("        |");
         
-        let fline = self.lines.clone().nth(first_line - 1).unwrap();
+        let fline = lines.clone().nth(first_line - 1).unwrap();
         eprintln!("   {first_line:>4} | {fline}"); 
         eprint!  ("        | ");
         
@@ -56,7 +61,7 @@ impl<'a> Repoter<'a>
 
         // Middle Lines if there is
         for line_no2 in first_line+1..last_line {
-            let line = self.lines.clone().nth(line_no2 - 1).unwrap();
+            let line = lines.clone().nth(line_no2 - 1).unwrap();
             eprintln!("   {line_no2:>4} | {line}");
             eprint!  ("        | ");
             Self::print_multiple("^", 1..line.len()+1);
@@ -64,7 +69,7 @@ impl<'a> Repoter<'a>
         }
         
         // Last Line
-        let lline = self.lines.clone().nth(last_line - 1).unwrap();
+        let lline = lines.clone().nth(last_line - 1).unwrap();
         eprintln!("   {last_line:>4} | {lline}"); 
         eprint!  ("        | ");
         Self::print_multiple("^", 1..end);
