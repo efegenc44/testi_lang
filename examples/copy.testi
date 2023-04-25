@@ -1,0 +1,13 @@
+let first  = [1, 2]
+let second = first
+
+first[0] = "WOW"
+print(first)
+print(second)
+
+let first  = [1, 2]
+let second = *first
+
+first[0] = "WOW"
+print(first)
+print(second)

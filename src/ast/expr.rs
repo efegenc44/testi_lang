@@ -73,13 +73,15 @@ impl From<Token> for BinaryOp {
 pub enum UnaryOp {
     Neg,
     Not,
+    Copy,
 }
 
 impl std::fmt::Display for UnaryOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            UnaryOp::Neg => write!(f, "-"),
-            UnaryOp::Not => write!(f, "!"),
+            UnaryOp::Neg  => write!(f, "-"),
+            UnaryOp::Not  => write!(f, "!"),
+            UnaryOp::Copy => write!(f, "*"),
         }
     }
 }
@@ -89,6 +91,7 @@ impl From<Token> for UnaryOp {
         match value {
             Token::MINUS => Self::Neg,
             Token::BANG  => Self::Not,
+            Token::STAR  => Self::Copy,
             _ => unreachable!(),
         }
     }

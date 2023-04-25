@@ -47,8 +47,9 @@ impl BinaryOp {
 impl UnaryOp {
     fn get_method_name(&self) -> String {
         match self {
-            UnaryOp::Neg => String::from("neg"),
-            UnaryOp::Not => String::from("not"),
+            UnaryOp::Neg  => String::from("neg"),
+            UnaryOp::Not  => String::from("not"),
+            UnaryOp::Copy => String::from("copy"),
         }
     }
 }
@@ -497,7 +498,7 @@ impl Engine {
                     .apply(vec![self.eval(&right)?], self)
                     .map_err(|(err, inner_err)| Error::new(err, expr.span.clone(), inner_err)),
             
-            Expr::Unary { op, operand } => 
+            Expr::Unary { op, operand } =>
                 handle(self.eval(&operand)?.get_method(&op.get_method_name(), self), expr.span.clone())?
                     .apply(vec![], self)
                     .map_err(|(err, inner_err)| Error::new(err, expr.span.clone(), inner_err)),

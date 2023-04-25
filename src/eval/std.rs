@@ -216,6 +216,11 @@ pub fn list_type() -> Type {
                 }
                 Ok(list[index_value].clone())
             }}),
+            (String::from("copy"), BuiltInFunction { arity: 0, fun: |values, engine| {
+                let Value::List(list) = values.last().unwrap() else {unreachable!()};
+                let list = engine.lists.get(list);
+                Ok(Value::List(engine.lists.make(list.clone())))
+            }}),
             (String::from("len"), BuiltInFunction { arity: 0, fun: |values, engine| {
                 let Value::List(list) = values.last().unwrap() else {unreachable!()};
                 let list = engine.lists.get(list);

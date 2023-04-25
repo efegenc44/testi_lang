@@ -128,6 +128,7 @@ impl Parser {
             KNOTHING     => Spanned::new(Expr::Nothing, cs),
             PLUS |
             BANG |
+            STAR |
             MINUS => {
                 let op = ct.into();
                 let product = self.product()?;
