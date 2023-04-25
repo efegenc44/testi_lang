@@ -61,23 +61,32 @@ pub fn get_global() -> HashMap<String, Value> {
             }},
             value: None
         }),
-        ("showLists".to_string(), Value::BuiltInFunction { 
-            fun: BuiltInFunction { arity: 0, fun: |_, engine| {
-                dbg!(&engine.lists.values);
-                Ok(Value::Nothing)
-            }},
-            value: None
-        }),
-        ("showTypes".to_string(), Value::BuiltInFunction { 
-            fun: BuiltInFunction { arity: 0, fun: |_, engine| {
-                dbg!(&engine.types.values);
-                Ok(Value::Nothing)
-            }},
-            value: None
-        }),
-        ("showModules".to_string(), Value::BuiltInFunction { 
-            fun: BuiltInFunction { arity: 0, fun: |_, engine| {
-                dbg!(&engine.modules.values);
+        ("engine_show".to_string(), Value::BuiltInFunction { 
+            fun: BuiltInFunction { arity: 1, fun: |values, engine| {
+                let Value::String(s) = values.get(0).unwrap() else {
+                    return Err((format!("Expected `String` as first argument"), None));
+                };
+                match s.as_str() {
+                    "lists" => {
+                        dbg!(&engine.lists.values);
+                    },
+                    "maps" => {
+                        dbg!(&engine.maps.values);
+                    },
+                    "types" => {
+                        dbg!(&engine.types.values);
+                    },
+                    "modules" => {
+                        dbg!(&engine.modules.values);
+                    },
+                    "instances" => {
+                        dbg!(&engine.instances.values);
+                    },
+                    "functions" => {
+                        dbg!(&engine.functions.values);
+                    },
+                    _ => ()
+                }
                 Ok(Value::Nothing)
             }},
             value: None

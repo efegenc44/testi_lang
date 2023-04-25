@@ -287,15 +287,45 @@ impl Engine {
     fn assign(&mut self, assignee: &Spanned<Expr>, val: Value) -> Res<Value> {
         match &assignee.data {
             Expr::Variable(var) => match self.redefine(&var, val.clone()) {
-                Ok(())   => Ok(val),
+                Ok(())   => Ok(Value::Nothing),
                 Err(err) => simple_error(err, assignee.span.clone()),
             },
             
-            Expr::Index { from: _, index_expr: _ } =>
-                unimplemented!(),
+            Expr::Index { from, index_expr } => 
+                match self.eval(from)? {
+                    Value::List(id) => {
+                        let Value::Integer(index) = self.eval(index_expr)? else {
+                            return simple_error("Index must be an Integer.", from.span.clone())
+                        };
+                        let list = self.lists.get_mut(&id);
+                        match list.get_mut(index as usize) {
+                            Some(element) => *element = val,
+                            None => return simple_error("Index out of bounds", index_expr.span.clone()),
+                        }
+                        Ok(Value::Nothing)
+                    },
+                    Value::Map(id) => {
+                        let index = self.eval(index_expr)?;
+                        let map = self.maps.get_mut(&id);
+                        map.insert(handle(TryInto::try_into(index), index_expr.span.clone())?, val);
+                        Ok(Value::Nothing)
+                    },
+                    _ => return simple_error("Only can mutate lists and maps with indexing.", from.span.clone()),
+                }
 
-            Expr::Access { from: _, member: _ } => 
-                unimplemented!(),
+            Expr::Access { from, member } => {
+                let Value::Instance { type_id: _, id } = self.eval(from)? else {
+                    return simple_error("Only can mutate instances with access.", from.span.clone());
+                };
+                let instance = self.instances.get_mut(&id);
+                match instance.get_mut(member) {
+                    Some(member) => {
+                        *member = val;
+                        Ok(Value::Nothing)
+                    },
+                    None => simple_error("Instance has no member like that.", from.span.clone()),
+                }
+            },
             
             _ => simple_error("Invalid assignment target.", assignee.span.clone())
         }

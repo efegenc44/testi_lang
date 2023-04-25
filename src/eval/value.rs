@@ -10,7 +10,7 @@ use super::{
     r#type::*
 };
 
-#[derive(Clone, PartialEq, Hash, Eq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum KeyValue {
     IntegerKey(i32),
     StringKey(String),
@@ -60,7 +60,7 @@ pub struct BuiltInFunction {
     pub fun: fn(vals: Vec<Value>, engine: &mut Engine) -> Result<Value, (String, Option<Error>)>
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Function {
     pub args: Vec<String>,
     pub body: Vec<Spanned<Stmt>>,
