@@ -2,9 +2,9 @@
 pub struct Span {
     pub source_name: String,
     pub first_line: usize, 
-    pub last_line : usize,
-    pub start     : usize, 
-    pub end       : usize, 
+    pub last_line: usize,
+    pub start: usize, 
+    pub end: usize, 
 }
 
 impl Span {
@@ -12,11 +12,11 @@ impl Span {
         Self { source_name, first_line, last_line, start, end }
     }
 
-    pub fn extend(&self, other: &Span) -> Span {
+    pub fn extend(self, other: &Span) -> Span {
         assert!(&self.source_name == &other.source_name);
 
         Span::new(
-            self.source_name.clone(),
+            self.source_name,
             self.first_line, 
             other.last_line, 
             self.start, 
