@@ -80,13 +80,8 @@ impl Lexer {
         }
         let range = string_start..self.cursor;
         self.advance(); // Consume closing '"' and advance.
-        if range.len() == 1 {
-            let ch = self.chars[string_start];
-            Ok(CHAR(ch))
-        } else {
-            let string = self.chars[range].iter().collect();
-            Ok(STRING(string))
-        }
+        let string = self.chars[range].iter().collect();
+        Ok(STRING(string))
     }
 
     fn number(&mut self) -> Token {

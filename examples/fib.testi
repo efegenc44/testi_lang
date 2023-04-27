@@ -9,7 +9,7 @@ fun memoized_fib(n)
     let cache = #[]
     
     fun fib(n)
-        if contains_key(cache, n) then
+        if cache.contains_key(n) then
             return cache[n]
         end
 
@@ -18,10 +18,9 @@ fun memoized_fib(n)
         end
         
         let res = recur(n-1) + recur(n-2)
-        cache += [n, res] 
+        cache[n] = res 
         res
     end
-
     fib(n)
 end
 

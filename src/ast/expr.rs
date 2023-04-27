@@ -195,7 +195,6 @@ pub enum Expr {
     Natural(usize),
     Float(f32),
     String(String),
-    Char(char),
     Bool(bool),
     Variable(String),
     Copy(Box<Spanned<Expr>>),

@@ -1,5 +1,6 @@
 use crate::span::Span;
 
+#[derive(Debug)]
 pub struct Error {
     pub msg: String,
     pub span: Span,

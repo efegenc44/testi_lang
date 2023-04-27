@@ -14,7 +14,6 @@ pub enum BuiltInType {
     Nothing,
     Type,
     Module,
-    Character,
 
     CustomStartId
 }

@@ -7,15 +7,12 @@ use crate::{
         expr::{ Expr, AssignOp },
         parser::Parser,
     },
-    span::Spanned, lex::lexer::Lexer, handle
+    span::Spanned, lex::lexer::Lexer, handle,
+    stdlib::{ prelude, types },
 };
 
 use super::{
     value::{ Value, self },
-    std::{
-        get_global, integer_type, 
-        bool_type, string_type, function_type, range_type, list_type, nothing_type
-    }, 
     r#type::*, table::Table,
 };
 
@@ -48,7 +45,7 @@ pub struct Engine {
 impl Engine {
     pub fn new() -> Self {
         let mut engine = Self { 
-            ctx: vec![get_global()], 
+            ctx: vec![prelude::get_global()], 
 
             types    : Table::new(),
             modules  : Table::new(),
@@ -66,13 +63,26 @@ impl Engine {
     }
 
     fn init_builtin_types(&mut self) {
-        self.types.values.insert(BuiltInType::Function as usize, function_type());
-        self.types.values.insert(BuiltInType::Integer as usize, integer_type());
-        self.types.values.insert(BuiltInType::String as usize, string_type());
-        self.types.values.insert(BuiltInType::Range as usize, range_type());
-        self.types.values.insert(BuiltInType::Bool as usize, bool_type());
-        self.types.values.insert(BuiltInType::List as usize, list_type());
-        self.types.values.insert(BuiltInType::Nothing as usize, nothing_type());
+        self.types.values.insert(BuiltInType::Integer  as usize, types::integer_type::integer());
+        self.types.values.insert(BuiltInType::Float    as usize, types::float_type::float());
+        self.types.values.insert(BuiltInType::String   as usize, types::string_type::string());
+        self.types.values.insert(BuiltInType::Bool     as usize, types::bool_type::bool());
+        self.types.values.insert(BuiltInType::List     as usize, types::list_type::list());
+        self.types.values.insert(BuiltInType::Map      as usize, types::map_type::map());
+        self.types.values.insert(BuiltInType::Range    as usize, types::range_type::range());
+        self.types.values.insert(BuiltInType::Function as usize, types::function_type::function());
+        self.types.values.insert(BuiltInType::Nothing  as usize, types::nothing_type::nothing());
+        self.types.values.insert(BuiltInType::Type     as usize, types::type_type::typee());
+        self.types.values.insert(BuiltInType::Module   as usize, types::module_type::module());
+
+        self.enter_scope();
+        let lexer = Lexer::from_file("src/stdlib/prelude.testi").unwrap();
+        let tokens = lexer.collect::<Res<_>>().unwrap();
+        let stmts = Parser::new(tokens).collect::<Res<_>>().unwrap();
+        let _ = self.run_module(&stmts).unwrap();
+
+        let id = self.modules.make(self.ctx.pop().unwrap());
+        self.define("prelude".to_string(), Value::Module(id))
     }
 
     pub fn mark_and_sweep(&mut self) {
@@ -266,6 +276,7 @@ impl Engine {
                 let mut path = strings.join("/");
                 path.push_str(".testi");
                 
+                self.enter_scope();
                 let lexer = Lexer::from_file(&path)
                     .map_err(|_| Error::new("Error Importing a file.", stmt.span.clone(), None))?;
                 let tokens = lexer.collect::<Res<_>>()              
@@ -475,16 +486,14 @@ impl Engine {
             Expr::Natural(nat) => Ok(Value::Integer(*nat as i32)),
             Expr::Float(float) => Ok(Value::Float(*float)),
             Expr::String(s) => Ok(Value::String(s.to_string())),
-            Expr::Char(ch) => Ok(Value::Char(*ch)),
             Expr::Bool(b) => Ok(Value::Bool(*b)),
             Expr::Nothing => Ok(Value::Nothing),
             Expr::Variable(var) => Ok(handle!(self.resolve(var), expr.span.clone())?),
             Expr::Copy(expr) =>
                 Ok(match self.eval(expr)? {
-                    // Only copy the mutable values.
+                    // Only copy the mutable values. (Except type)
                     Value::List(id) => Value::List(self.lists.copy(&id)),
                     Value::Map(id)  => Value::Map(self.maps.copy(&id)),
-                    Value::Type(id) => Value::Type(self.types.copy(&id)),
                     Value::Instance { type_id, id } 
                         => Value::Instance { type_id, id: self.instances.copy(&id)},
                     // No need to copy immutable values.

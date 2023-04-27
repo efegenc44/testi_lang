@@ -1,34 +1,5 @@
-// fun f()
-//     import examples.module.module1
-// 
-//     let c = module1.module2 
-//     fun (c) a()
-//         c
-//     end
-//     a
-// end
-// 
-// let b = f()()
-// 
-// print(b.print_something())
-
-// fun a()
-//     def A
-//         x y
-//     end
-// 
-//     A
-// end
-// 
-// let defa = a()
-// print(defa(3, 4))
-
-def A
-    a
-end
-
-let c = A(map(\x. x+3 end, [9]))
-
-showLists()
-markNsweep()
-showLists()
+print(
+    [1, 3]
+        .map(\x. x+3 end)
+        .collect_to_list()
+)

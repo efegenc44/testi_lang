@@ -81,7 +81,6 @@ pub enum Value {
     Integer(i32),
     Float(f32),
     String(String),
-    Char(char),
     Bool(bool),
     List(usize),
     Map(usize),
@@ -109,7 +108,6 @@ impl std::fmt::Display for Value {
             Value::Integer(int) => write!(f, "{int}"),
             Value::Float(float) => write!(f, "{float}"),
             Value::String(s)    => write!(f, "{s}"),
-            Value::Char(ch)     => write!(f, "{ch}"),
             Value::Bool(b)      => write!(f, "{b}"),
             Value::List(list)   => write!(f, "{list}"),
             Value::Map(map)     => write!(f, "{map}"),
@@ -145,8 +143,6 @@ impl Value {
             Value::Module(_)          => BuiltInType::Module as usize,
             
             Value::Instance { type_id, .. } => *type_id,
-            
-            Value::Char(_)            => BuiltInType::Character as usize,
         }
     }
 
@@ -154,6 +150,13 @@ impl Value {
         match self {
             Value::Integer(int) => Ok(*int),
             _ => Err(format!("Expected Integer, got {}.", self.ty()))
+        }
+    }
+
+    pub fn as_float(&self) -> Result<f32, String> {
+        match self {
+            Value::Float(float) => Ok(*float),
+            _ => Err(format!("Expected Float, got {}.", self.ty()))
         }
     }
 
@@ -171,10 +174,31 @@ impl Value {
         }
     }
 
+    pub fn as_list(&self) -> Result<usize, String> {
+        match self {
+            Value::List(id) => Ok(*id),
+            _ => Err(format!("Expected List, got {}.", self.ty()))
+        }
+    }
+
+    pub fn as_map(&self) -> Result<usize, String> {
+        match self {
+            Value::Map(id) => Ok(*id),
+            _ => Err(format!("Expected Map, got {}.", self.ty()))
+        }
+    }
+
     pub fn as_type(&self) -> Result<usize, String> {
         match self {
             Value::Type(id) => Ok(*id),
             _ => Err(format!("Expected Type, got {}.", self.ty()))
+        }
+    }
+
+    pub fn as_module(&self) -> Result<usize, String> {
+        match self {
+            Value::Module(id) => Ok(*id),
+            _ => Err(format!("Expected Module, got {}.", self.ty()))
         }
     }
 

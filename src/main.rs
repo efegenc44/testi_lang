@@ -4,6 +4,7 @@ mod eval;
 mod error;
 mod span;
 mod pipeline;
+mod stdlib;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect(); 

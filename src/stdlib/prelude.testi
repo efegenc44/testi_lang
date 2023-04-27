@@ -1,0 +1,67 @@
+impl ne(other)
+    !self.eq(other)
+end
+
+impl eq(other)
+    !self.ne(other)
+end
+
+impl le(other)
+    self.lt(other) or self.eq(other) 
+end
+
+impl ge(other)
+    self.gt(other) or self.eq(other) 
+end
+
+impl gt(other)
+    !self.le(other) 
+end
+
+impl lt(other)
+    !self.ge(other)
+end
+
+impl map(f)
+    def MapIter
+        iter f
+    impl
+        fun step(step_no)
+            let iter_res = self.iter.step(step_no);
+            [self.f(iter_res[0]), iter_res[1]]
+        end
+
+        fun collect_to_list()
+            let list = []
+            for value in self then
+                list.push(value)
+            end
+            list
+        end
+    end
+
+    MapIter(self, f)
+end
+
+impl for List
+    fun step(step_no)
+        [self[step_no], step_no != self.len()-1]
+    end
+end
+
+impl for Range
+    fun step(step_no)
+        let n = step_no + self.bot;
+        [n, self.up-1 != n] 
+    end
+end
+
+impl for Integer
+    fun xrn(other)
+        Range(self, other)
+    end
+    
+    fun irn(other)
+        Range(self, other+1)
+    end
+end
