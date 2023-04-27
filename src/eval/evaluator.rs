@@ -57,8 +57,8 @@ impl Engine {
             impls: Impls::new(),
             impls_to_collect: vec![HashSet::new()],
         };
-        engine.init_builtin_types();
         engine.types.current_id = BuiltInType::CustomStartId as usize;
+        engine.init_builtin_types();
         engine
     }
 
@@ -81,8 +81,8 @@ impl Engine {
         let stmts = Parser::new(tokens).collect::<Res<_>>().unwrap();
         let _ = self.run_module(&stmts).unwrap();
 
-        let id = self.modules.make(self.ctx.pop().unwrap());
-        self.define("prelude".to_string(), Value::Module(id))
+        let module = self.ctx.pop().unwrap();
+        self.ctx.last_mut().unwrap().extend(module);
     }
 
     pub fn mark_and_sweep(&mut self) {

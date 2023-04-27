@@ -22,24 +22,24 @@ impl lt(other)
     !self.ge(other)
 end
 
-impl map(f)
-    def MapIter
-        iter f
-    impl
-        fun step(step_no)
-            let iter_res = self.iter.step(step_no);
-            [self.f(iter_res[0]), iter_res[1]]
-        end
-
-        fun collect_to_list()
-            let list = []
-            for value in self then
-                list.push(value)
-            end
-            list
-        end
+def MapIter
+    iter f
+impl
+    fun step(step_no)
+        let iter_res = self.iter.step(step_no);
+        [self.f(iter_res[0]), iter_res[1]]
     end
 
+    fun collect_to_list()
+        let list = []
+        for value in self then
+            list.push(value)
+        end
+        list
+    end
+end
+
+impl map(f)
     MapIter(self, f)
 end
 
