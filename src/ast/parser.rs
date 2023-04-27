@@ -196,7 +196,11 @@ impl Parser {
             KTRUE        => Spanned::new(Expr::Bool(true), cs),
             KFALSE       => Spanned::new(Expr::Bool(false), cs),
             KNOTHING     => Spanned::new(Expr::Nothing, cs),
-            STAR | 
+            STAR => {
+                let product = self.product()?;
+                let product_span = product.span.clone();
+                Spanned::new(Expr::Copy(Box::new(product)), cs.extend(&product_span)) 
+            } 
             BANG |
             MINUS => {
                 let op = ct.into();
@@ -419,7 +423,7 @@ impl Parser {
             self.parse_until(Self::def_method, KEND)?
         } else { vec![] };
         let end_span = self.next();
-        Ok(Spanned::new(Stmt::Def { name, members, methods }, def_span.extend(&end_span)))
+        Ok(Spanned::new(Stmt::Definition { name, members, methods }, def_span.extend(&end_span)))
     }
 
     fn def_method(&mut self) -> Res<Spanned<stmt::Function>> {
@@ -439,7 +443,7 @@ impl Parser {
             let ty = self.consume_symbol()?;
             let mets = self.parse_until(Self::def_method, KEND)?;            
             let end_span = self.next();
-            return Ok(Spanned::new(Stmt::ImplFor { ty, mets }, impl_span.extend(&end_span)))
+            return Ok(Spanned::new(Stmt::ImplFor { ty, methods: mets }, impl_span.extend(&end_span)))
         }
         self.in_fun += 1;
         let name = self.consume_symbol()?;

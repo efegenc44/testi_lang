@@ -132,22 +132,21 @@ impl std::fmt::Debug for Value {
 impl Value {
     pub fn ty(&self) -> usize {
         match self {
-            Value::Integer(_)         => INTEGER_TYPE_ID,
-            Value::Float(_)           => FLOAT_TYPE_ID,
-            Value::String(_)          => STRING_TYPE_ID,
-            Value::Bool(_)            => BOOL_TYPE_ID,
-            Value::List(_)            => LIST_TYPE_ID,
-            Value::Map(_)             => MAP_TYPE_ID,
+            Value::Integer(_)         => BuiltInType::Integer as usize,
+            Value::Float(_)           => BuiltInType::Float as usize ,
+            Value::String(_)          => BuiltInType::String as usize,
+            Value::Bool(_)            => BuiltInType::Bool as usize,
+            Value::List(_)            => BuiltInType::List as usize,
+            Value::Map(_)             => BuiltInType::Map as usize,
             Value::Function {..}        |
-            Value::BuiltInFunction {..} => FUNCTION_TYPE_ID,
-            Value::Nothing            => NOTHING_TYPE_ID,
-            Value::Type(_)            => TYPE_TYPE_ID,
-            Value::Module(_)          => MODULE_TYPE_ID,
+            Value::BuiltInFunction {..} => BuiltInType::Function as usize,
+            Value::Nothing            => BuiltInType::Nothing as usize,
+            Value::Type(_)            => BuiltInType::Type as usize,
+            Value::Module(_)          => BuiltInType::Module as usize,
             
             Value::Instance { type_id, .. } => *type_id,
             
-            Value::Char(_)            => CHARACTER_TYPE_ID,
-            
+            Value::Char(_)            => BuiltInType::Character as usize,
         }
     }
 
@@ -175,6 +174,13 @@ impl Value {
     pub fn as_type(&self) -> Result<usize, String> {
         match self {
             Value::Type(id) => Ok(*id),
+            _ => Err(format!("Expected Type, got {}.", self.ty()))
+        }
+    }
+
+    pub fn as_instance(&self) -> Result<(usize, usize), String> {
+        match self {
+            Value::Instance { type_id, id } => Ok((*type_id, *id)),
             _ => Err(format!("Expected Type, got {}.", self.ty()))
         }
     }
@@ -206,9 +212,7 @@ impl Value {
             Value::Instance { type_id, id } => {
                 (*engine).types.marked.insert(*type_id);
                 
-                let (Type::Def        { methods, .. }|
-                     Type::BuiltInDef { methods, .. }) = (*engine).types.get(id);
-                
+                let Type { methods, .. } = (*engine).types.get(id);
                 for method in methods.values() {
                     (*engine).functions.marked.insert(*method);
                 }
@@ -239,9 +243,7 @@ impl Value {
             Value::Type(id) => {
                 (*engine).types.marked.insert(*id);
                 
-                let (Type::Def        { methods, .. }|
-                     Type::BuiltInDef { methods, .. }) = (*engine).types.get(id);
-                
+                let Type { methods, .. } = (*engine).types.get(id);
                 for method in methods.values() {
                     (*engine).functions.marked.insert(*method);
                 }
@@ -255,31 +257,22 @@ impl Value {
     }
     
     pub fn get_method(&self, method: &str, engine: &mut Engine) -> Result<Value, String> {
-        match engine.types.get(&self.ty()) {
-            Type::Def { methods, .. } => {
-                if let Some(method) = methods.get(method) {
-                    return Ok(Value::Function { 
-                        id: *method, 
-                        value: Some(Box::new(self.clone())),
-                        closure: None
-                    })
-                }
-            }
-            Type::BuiltInDef { builtin_methods, methods, .. } => {
-                if let Some(method) = builtin_methods.get(method) {
-                    return Ok(Value::BuiltInFunction { 
-                        fun: method.clone(), 
-                        value: Some(Box::new(self.clone())),
-                    })
-                }
+        let Type { methods, builtin_methods, .. } = engine.types.get(&self.ty());
 
-                if let Some(method) = methods.get(method) {
-                    return Ok(Value::Function { 
-                        id: *method,
-                        value: Some(Box::new(self.clone())), 
-                        closure: None
-                    })
-                }
+        if let Some(method) = methods.get(method) {
+            return Ok(Value::Function { 
+                id: *method, 
+                value: Some(Box::new(self.clone())),
+                closure: None
+            })
+        }
+
+        if let Some(builtin_methods) = builtin_methods {
+            if let Some(method) = builtin_methods.get(method) {
+                return Ok(Value::BuiltInFunction { 
+                    fun: method.clone(), 
+                    value: Some(Box::new(self.clone())),
+                })
             }
         }
 
@@ -360,17 +353,16 @@ impl Value {
                 Ok(rv)
             },
             
-            Value::BuiltInFunction { fun, value: self_value } => {
+            Value::BuiltInFunction { fun, value } => {
                 check_arity(fun.arity)?;
-                if let Some(value) = self_value {
+                if let Some(value) = value {
                     vals.push(*value.clone());
                 }
                 (fun.fun)(vals, engine)
             }
                 
             Value::Type(type_id) => {
-                let (Type::Def       { members, .. }| 
-                    Type::BuiltInDef { members, .. }) = engine.types.get(type_id);
+                let Type { members, .. } = engine.types.get(type_id);
                 check_arity(members.len())?;
                 let mut map = HashMap::new(); 
                 for (member, v) in std::iter::zip(members, vals) {

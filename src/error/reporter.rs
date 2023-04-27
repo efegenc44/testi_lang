@@ -13,10 +13,17 @@ impl Repoter {
         Self { lineses: HashMap::new() }
     }
     
+    #[inline]
     fn print_multiple(s: &str, range: Range<usize>) {
         for _ in range {
             eprint!("{s}");
         }
+    }
+
+    pub fn report_file_error(error: std::io::Error, path: &str) {
+        eprintln!("\n  Error | {error}"); 
+        eprintln!("        |");
+        eprintln!("   File | {path}\n");
     }
 
     // TODO: Refactor 

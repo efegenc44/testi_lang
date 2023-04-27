@@ -24,6 +24,28 @@ pub enum BinaryOp {
     Irn
 }
 
+impl BinaryOp {
+    pub fn get_method_name(&self) -> String {
+        match self {
+            BinaryOp::Add => String::from("add"),
+            BinaryOp::Sub => String::from("sub"),
+            BinaryOp::Mul => String::from("mul"),
+            BinaryOp::Div => String::from("div"),
+            BinaryOp::Mod => String::from("mod"),
+            BinaryOp::Eq  => String::from("eq"),
+            BinaryOp::Ne  => String::from("ne"),
+            BinaryOp::Gt  => String::from("gt"),
+            BinaryOp::Ge  => String::from("ge"),
+            BinaryOp::Lt  => String::from("lt"),
+            BinaryOp::Le  => String::from("le"),
+            BinaryOp::And => String::from("and"),
+            BinaryOp::Or  => String::from("or"),
+            BinaryOp::Xrn => String::from("xrn"),
+            BinaryOp::Irn => String::from("irn"),
+        }
+    }
+}
+
 impl std::fmt::Display for BinaryOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -73,7 +95,15 @@ impl From<Token> for BinaryOp {
 pub enum UnaryOp {
     Neg,
     Not,
-    Copy,
+}
+
+impl UnaryOp {
+    pub fn get_method_name(&self) -> String {
+        match self {
+            UnaryOp::Neg  => String::from("neg"),
+            UnaryOp::Not  => String::from("not"),
+        }
+    }
 }
 
 impl std::fmt::Display for UnaryOp {
@@ -81,7 +111,6 @@ impl std::fmt::Display for UnaryOp {
         match self {
             UnaryOp::Neg  => write!(f, "-"),
             UnaryOp::Not  => write!(f, "!"),
-            UnaryOp::Copy => write!(f, "*"),
         }
     }
 }
@@ -91,7 +120,6 @@ impl From<Token> for UnaryOp {
         match value {
             Token::MINUS => Self::Neg,
             Token::BANG  => Self::Not,
-            Token::STAR  => Self::Copy,
             _ => unreachable!(),
         }
     }
@@ -170,5 +198,6 @@ pub enum Expr {
     Char(char),
     Bool(bool),
     Variable(String),
+    Copy(Box<Spanned<Expr>>),
     Nothing,
 }

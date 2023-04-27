@@ -4,17 +4,17 @@ use super::{value::{ Value, BuiltInFunction }, r#type::*};
 
 pub fn get_global() -> HashMap<String, Value> {
     let global = HashMap::from([        
-        ("Integer".to_string(), Value::Type(INTEGER_TYPE_ID)),
-        ("Bool".to_string(), Value::Type(BOOL_TYPE_ID)),
-        ("String".to_string(), Value::Type(STRING_TYPE_ID)),
-        //("Float".to_string(), Value::Type(FLOAT_TYPE_ID)),
-        ("Range".to_string(), Value::Type(RANGE_TYPE_ID)),
-        //("Character".to_string(), Value::Type(CHARACTER_TYPE_ID)),
-        ("Function".to_string() , Value::Type(FUNCTION_TYPE_ID)),
-        ("List".to_string(), Value::Type(LIST_TYPE_ID)),
-        //("Map".to_string(), Value::Type(MAP_TYPE_ID)),
-        ("Nothing".to_string(), Value::Type(NOTHING_TYPE_ID)),
-        //("Type".to_string(), Value::Type(TYPE_TYPE_ID)),
+        ("Integer".to_string(), Value::Type(BuiltInType::Integer as usize)),
+        ("Bool".to_string(), Value::Type(BuiltInType::Bool as usize)),
+        ("String".to_string(), Value::Type(BuiltInType::String as usize)),
+        //("Float".to_string(), Value::Type(TypeId::Float as usize)),
+        ("Range".to_string(), Value::Type(BuiltInType::Range as usize)),
+        //("Character".to_string(), Value::Type(TypeId::Character as usize)),
+        ("Function".to_string() , Value::Type(BuiltInType::Function as usize)),
+        ("List".to_string(), Value::Type(BuiltInType::List as usize)),
+        //("Map".to_string(), Value::Type(TypeId::Map as usize)),
+        ("Nothing".to_string(), Value::Type(BuiltInType::Nothing as usize)),
+        //("Type".to_string(), Value::Type(TypeId::Type as usize)),
         
         ("print".to_string(), Value::BuiltInFunction {
             fun: BuiltInFunction { arity: 1, fun: |vals, _| {
@@ -97,9 +97,9 @@ pub fn get_global() -> HashMap<String, Value> {
 }
 
 pub fn integer_type() -> Type {
-    Type::BuiltInDef { 
+    Type { 
         members: vec![], 
-        builtin_methods: HashMap::from([
+        builtin_methods: Some(HashMap::from([
             (String::from("times"), BuiltInFunction { arity: 2, fun: |values, engine| {
                 let v = values.last().unwrap().as_integer().unwrap();
                 let Value::List(list) = &values[1] else {
@@ -135,15 +135,15 @@ pub fn integer_type() -> Type {
                 let right = values[0].as_integer().map_err(|err| (err, None))?;
                 Ok(Value::Bool(left == right))
             }})
-        ]),
+        ])),
         methods: HashMap::new(), 
     }
 }
 
 pub fn string_type() -> Type {
-    Type::BuiltInDef { 
+    Type { 
         members: vec![], 
-        builtin_methods: HashMap::from([
+        builtin_methods: Some(HashMap::from([
             (String::from("parse_integer"), BuiltInFunction { arity: 0, fun: |values, _| {
                 let v = values.last().unwrap().as_string().unwrap();
                 match v.parse() {
@@ -151,15 +151,15 @@ pub fn string_type() -> Type {
                     Err(_)  => Err((format!("Couldn't convert to `Integer`"), None))
                 }
             }})
-        ]),
+        ])),
         methods: HashMap::new(), 
     }
 }
 
 pub fn bool_type() -> Type {
-    Type::BuiltInDef { 
+    Type { 
         members: vec![], 
-        builtin_methods: HashMap::from([
+        builtin_methods: Some(HashMap::from([
             (String::from("and"), BuiltInFunction { arity: 1, fun: |values, _| {
                 let left  = values.last().unwrap().as_bool().unwrap();                    
                 let right = values[0].as_bool().map_err(|err| (err, None))?;
@@ -174,39 +174,39 @@ pub fn bool_type() -> Type {
                 let right = values[0].as_bool().map_err(|err| (err, None))?;
                 Ok(Value::Bool(left == right))
             }})
-        ]),
+        ])),
         methods: HashMap::new(),
     }
 }
 
 pub fn function_type() -> Type {
-    Type::BuiltInDef { 
+    Type { 
         members: vec![], 
-        builtin_methods: HashMap::new(), 
+        builtin_methods: None, 
         methods: HashMap::new(), 
     }
 }
 
 pub fn range_type() -> Type {
-    Type::BuiltInDef { 
+    Type { 
         members: vec![String::from("bot"), String::from("up")], 
-        builtin_methods: HashMap::new(), 
+        builtin_methods: None, 
         methods: HashMap::new(), 
     }
 }
 
 pub fn nothing_type() -> Type {
-    Type::BuiltInDef { 
-        members: vec![String::from("bot"), String::from("up")], 
-        builtin_methods: HashMap::new(), 
+    Type { 
+        members: vec![], 
+        builtin_methods: None, 
         methods: HashMap::new(), 
     }
 }
 
 pub fn list_type() -> Type {
-    Type::BuiltInDef { 
+    Type { 
         members: vec![], 
-        builtin_methods: HashMap::from([
+        builtin_methods: Some(HashMap::from([
             (String::from("index"), BuiltInFunction { arity: 1, fun: |values, engine| {
                 let Value::List(list) = values.last().unwrap() else {unreachable!()};
                 let list = engine.lists.get(list);
@@ -226,7 +226,7 @@ pub fn list_type() -> Type {
                 let list = engine.lists.get(list);
                 Ok(Value::Integer(list.len() as i32))
             }}),
-        ]), 
+        ])), 
         methods: HashMap::new(), 
     }
 }

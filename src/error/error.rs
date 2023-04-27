@@ -15,10 +15,11 @@ impl Error {
     }
 }
 
-pub fn handle<T>(res: Result<T, String>, span: Span) -> Res<T> {
-    res.map_err(|err| {
-        Error::new(err, span, None)
-    })
+#[macro_export]
+macro_rules! handle {
+    ($res:expr, $span:expr) => {
+        $res.map_err(|err| Error::new(err, $span, None))
+    };
 }
 
 pub type Res<T> = Result<T, Error>;

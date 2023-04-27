@@ -24,10 +24,11 @@ impl Iterator for Lexer {
 }
 
 impl Lexer {
-    pub fn new(source_name: String, source: &str) -> Self {
-        let mut chars: Vec<_> = source.chars().collect();
+    pub fn from_file(file_name: &str) -> std::io::Result<Self> {
+        let file = std::fs::read_to_string(file_name)?;
+        let mut chars: Vec<_> = file.chars().collect();
         chars.push('\0');
-        Self { source_name, chars, cursor: 0, col: 1, row: 1 }
+        Ok(Self { source_name: file_name.to_string(), chars, cursor: 0, col: 1, row: 1 })
     }
 
     fn peek(&self) -> char {

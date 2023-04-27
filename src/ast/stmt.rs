@@ -12,7 +12,7 @@ pub struct Function {
 #[derive(Clone, Debug)]
 pub enum Stmt {
     Import(Vec<String>),
-    Def {
+    Definition {
         name: String,
         members: Vec<String>,
         methods: Vec<Spanned<Function>> 
@@ -20,7 +20,7 @@ pub enum Stmt {
     Impl(Function),
     ImplFor {
         ty: String,
-        mets: Vec<Spanned<Function>> 
+        methods: Vec<Spanned<Function>> 
     },
     Let {
         var: String,
