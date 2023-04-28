@@ -1,0 +1,36 @@
+impl for List
+    fun iter()
+    end
+    
+    fun step(step_no)
+        [self[step_no], step_no != self.len()-1]
+    end
+
+    fun eq(other)
+        if !(other is List) then
+            return false
+        end
+        
+        if self.len() != other.len() then
+            return false
+        end
+
+        for i in self.len() then
+            if self[i] != other[i] then
+                return false
+            end
+        end
+
+        true
+    end
+
+    fun to_string()
+        let string = ""
+        string += "[ "
+        for value in self then
+            string += value.to_string() + " "
+        end
+        // TODO: use \n here
+        string + "]"
+    end
+end

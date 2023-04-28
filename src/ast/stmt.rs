@@ -11,7 +11,10 @@ pub struct Function {
 
 #[derive(Clone, Debug)]
 pub enum Stmt {
-    Import(Vec<String>),
+    Import {
+        path: Vec<String>,
+        injection: bool,
+    },
     Definition {
         name: String,
         members: Vec<String>,

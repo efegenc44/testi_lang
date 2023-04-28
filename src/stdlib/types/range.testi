@@ -1,0 +1,6 @@
+impl for Range
+    fun step(step_no)
+        let n = step_no + self.bot;
+        [n, self.up-1 != n] 
+    end
+end

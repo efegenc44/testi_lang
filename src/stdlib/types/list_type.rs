@@ -35,42 +35,4 @@ make_type! { list , (), Some(map! {
         let list = engine.lists.get(&selff);
         Ok(Integer(list.len() as i32))
     }},
-
-    eq => builtinfun! { 1, |vals, engine| {
-        let selff = vals.last().unwrap().as_list().unwrap();
-        match &vals[0] {
-            List(other) => {
-                // TODO: Discard clone
-                let selff = engine.lists.get(&selff).clone(); 
-                let other = engine.lists.get(&other).clone(); 
-                for (value1, value2) in std::iter::zip(selff, other) {
-                    let Bool(b) = value1.get_method("eq", engine)
-                        .map_err(|err| (err, None))
-                        .and_then(|method| method.apply(vec![value2.clone()], engine))? else {
-                        return Err((format!("Equality should return `Bool`"), None))
-                    };
-                    if !b {
-                        return Ok(Bool(false))
-                    }
-                }
-                Ok(Bool(true))
-            },
-            other => return Err((format!("Can't check equality of {} against `Integer`", other.ty()), None))
-        }
-    }},
-
-    to_string => builtinfun! { 0, |vals, engine| {
-        let selff = vals.last().unwrap().as_list().unwrap();
-        // TODO: discard cloning 
-        let list = engine.lists.get(&selff).clone();
-        let mut string = std::string::String::from("[ ");
-        for value in list {
-            let s = value.get_method("to_string", engine)
-                        .map_err(|err| (err, None))
-                        .and_then(|method| method.apply(vec![], engine))?;
-            string += format!("{s} ").as_str();
-        }
-        string += "]\n";
-        Ok(String(string))
-    }},
 })}

@@ -5,14 +5,3 @@ impl for Function
         end
     end
 end
-
-fun add2(x)
-    x + 2
-end
-
-fun add5(x)
-    x + 5
-end
-
-let f = add2 + add5
-print(f(input().parse_integer()))

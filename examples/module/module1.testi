@@ -1,3 +1,3 @@
-import examples.module.module2
+import! examples.module.module2
 
-module2.print_something()
+print_something()

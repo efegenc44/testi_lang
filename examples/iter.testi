@@ -1,55 +1,3 @@
-impl ne(other)
-    !(self == other) 
-end
-
-impl for Integer
-    fun xrn(other)
-        Range(self, other)
-    end
-
-    fun step(step_no)
-        [step_no, self-1 != step_no]
-    end
-end
-
-def Enumeration
-    value
-impl
-    fun step(step_no)
-        let value = self.value.step(step_no)
-        let cond = value[1]
-        let value = value[0];
-        [[step_no, value], cond]
-    end
-end
-
-impl enumerate()
-    Enumeration(self)
-end
-
-impl for List
-    fun step(step_no)
-        [self[step_no], step_no != self.len()-1]
-    end 
-
-    fun map(f)    
-        for v in self.enumerate() then
-            let index = v[0]
-            let value = v[1]
-
-            self = self[index] = f(value)
-        end
-        self
-    end
-end
-
-impl for Range
-    fun step(step_no)
-        let n = step_no + self.bot;
-        [n, self.up-1 != n] 
-    end
-end
-
 for i in 1..3 then
     print(i)
 end
@@ -62,4 +10,8 @@ for i in [1, 2, 3, "WOW"] then
     print(i)
 end
 print("")
-// print([1, 2, 3].map(\x. x+3 end))
+print(
+    [1, 2, 3]
+        .map(\x. x+3 end)
+        .collect_to_list()
+)

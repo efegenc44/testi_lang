@@ -26,6 +26,22 @@ impl Iterator for Parser {
 }
 
 macro_rules! binary_expr_precedence {
+    ($name: ident $upper: ident KIS NO_ASSOC) => {
+        fn $name(&mut self) -> Res<Spanned<Expr>> {
+            let mut left = self.$upper()?;
+            if let KIS = self.peek() {
+                self.advance();
+                let right = self.$upper()?;
+                let span = left.span.clone().extend(&right.span);
+                left = Spanned::new(Expr::TypeTest {
+                    ty: Box::new(left), 
+                    expr: Box::new(right)
+                }, span)
+            }
+            Ok(left)
+        }
+    };
+
     ($name: ident $upper: ident $($op: ident)|+ LEFT_ASSOC) => {
         fn $name(&mut self) -> Res<Spanned<Expr>> {
             let mut left = self.$upper()?;
@@ -60,7 +76,8 @@ macro_rules! binary_expr_precedence {
             }
             Ok(left)
         }
-    }
+    };
+
 }
 
 impl Parser {
@@ -455,11 +472,12 @@ impl Parser {
 
     fn import_statement(&mut self) -> Res<Spanned<Stmt>> {
         let import_span = self.next();
-        let mut strings = vec![self.consume_symbol()?];
+        let injection = self.optional(BANG);
+        let mut path = vec![self.consume_symbol()?];
         while self.optional(DOT) {
-            strings.push(self.consume_symbol()?)
+            path.push(self.consume_symbol()?)
         }
-        Ok(Spanned::new(Stmt::Import(strings), import_span))
+        Ok(Spanned::new(Stmt::Import { path, injection }, import_span))
     }
 
     fn statement(&mut self) -> Res<Spanned<Stmt>> {

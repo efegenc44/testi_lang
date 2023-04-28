@@ -1,0 +1,13 @@
+impl for Integer
+    fun xrn(other)
+        Range(self, other)
+    end
+    
+    fun irn(other)
+        Range(self, other+1)
+    end
+
+    fun step(step_no)
+        [step_no, self-1 != step_no]
+    end
+end

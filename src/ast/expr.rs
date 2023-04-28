@@ -86,7 +86,7 @@ impl From<Token> for BinaryOp {
             Token::KOR          => Self::Or,
             Token::TWODOT       => Self::Xrn,
             Token::TWODOTEQUAL  => Self::Irn,
-            _ => unreachable!(),
+            _ => unreachable!()
         }
     }
 }

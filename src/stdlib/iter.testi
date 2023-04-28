@@ -1,0 +1,35 @@
+def MapIter
+    iter f
+impl
+    fun step(step_no)
+        let iter_res = self.iter.step(step_no);
+        [self.f(iter_res[0]), iter_res[1]]
+    end
+
+    fun collect_to_list()
+        let list = []
+        for value in self then
+            list.push(value)
+        end
+        list
+    end
+end
+
+impl map(f)
+    MapIter(self, f)
+end
+
+def Enumeration
+    value
+impl
+    fun step(step_no)
+        let value = self.value.step(step_no)
+        let cond = value[1]
+        let value = value[0];
+        [[step_no, value], cond]
+    end
+end
+
+impl enumerate()
+    Enumeration(self)
+end

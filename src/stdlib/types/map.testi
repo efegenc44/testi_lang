@@ -1,0 +1,45 @@
+impl for Map
+    fun iter()
+        MapWithKeys(self, self.keys())
+    end
+
+    fun eq(other)
+        if self.len() != other.len() then
+            return false 
+        end
+
+        let keys = self.keys()
+        for i in self.len() then
+            let key = keys[i]
+            if !other.contains_key(key) then
+                return false
+            end
+            
+            if self[key] != other[key] then
+                return false
+            end
+        end
+        true
+    end    
+
+    fun to_string()
+        let string = ""
+        string += "#[ "
+        let keys = self.keys()
+        for key in keys then
+            string += key.to_string()
+            string += ": "
+            string += self[key].to_string() + " "
+        end
+        string + "]"
+    end
+end
+
+def MapWithKeys
+    map keys
+impl
+    fun step(step_no)
+        let key = self.keys[step_no];
+        [[key, self.map[key]], step_no != self.keys.len()-1]
+    end
+end

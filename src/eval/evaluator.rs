@@ -58,11 +58,11 @@ impl Engine {
             impls_to_collect: vec![HashSet::new()],
         };
         engine.types.current_id = BuiltInType::CustomStartId as usize;
-        engine.init_builtin_types();
+        engine.init();
         engine
     }
 
-    fn init_builtin_types(&mut self) {
+    fn init(&mut self) {
         self.types.values.insert(BuiltInType::Integer  as usize, types::integer_type::integer());
         self.types.values.insert(BuiltInType::Float    as usize, types::float_type::float());
         self.types.values.insert(BuiltInType::String   as usize, types::string_type::string());
@@ -75,14 +75,12 @@ impl Engine {
         self.types.values.insert(BuiltInType::Type     as usize, types::type_type::typee());
         self.types.values.insert(BuiltInType::Module   as usize, types::module_type::module());
 
-        self.enter_scope();
+        // Inject Prelude
+        // TODO: Error handling.
         let lexer = Lexer::from_file("src/stdlib/prelude.testi").unwrap();
         let tokens = lexer.collect::<Res<_>>().unwrap();
         let stmts = Parser::new(tokens).collect::<Res<_>>().unwrap();
         let _ = self.run_module(&stmts).unwrap();
-
-        let module = self.ctx.pop().unwrap();
-        self.ctx.last_mut().unwrap().extend(module);
     }
 
     pub fn mark_and_sweep(&mut self) {
@@ -271,12 +269,14 @@ impl Engine {
             Stmt::Impl       {..} => (),
             Stmt::ImplFor    {..} => (),
             
-            Stmt::Import(strings) => {
-                let module_name = strings.last().unwrap().clone();
-                let mut path = strings.join("/");
+            Stmt::Import { path, injection } => {
+                let module_name = path.last().unwrap().clone();
+                let mut path = path.join("/");
                 path.push_str(".testi");
-                
-                self.enter_scope();
+
+                if !injection {
+                    self.enter_scope();
+                }
                 let lexer = Lexer::from_file(&path)
                     .map_err(|_| Error::new("Error Importing a file.", stmt.span.clone(), None))?;
                 let tokens = lexer.collect::<Res<_>>()              
@@ -286,10 +286,12 @@ impl Engine {
                 let _ = self.run_module(&stmts)       
                     .map_err(|err| Error::new("Error Importing a file.", stmt.span.clone(), Some(err)))?;
 
-                let id = self.modules.make(self.ctx.pop().unwrap());
-                self.define(module_name, Value::Module(id))
+                if !injection {
+                    let id = self.modules.make(self.ctx.pop().unwrap());
+                    self.define(module_name, Value::Module(id))
+                }
             }
-            
+
             Stmt::Let { var, expr } => {
                 let value = self.eval(expr)?;
                 self.define(var.to_string(), value);
@@ -332,8 +334,9 @@ impl Engine {
                 },
             
             Stmt::For { var, iter, body } => {
+                let iter_value = self.eval(&iter)?;
                 for step in 0.. {
-                    let i = handle!(self.eval(&iter)?.get_method("step", self), iter.span.clone())?
+                    let i = handle!(iter_value.get_method("step", self), iter.span.clone())?
                                 .apply(vec![Value::Integer(step)], self)
                                 .map_err(|(err, inner_err)| Error::new(err, iter.span.clone(), inner_err))?;
                     let Value::List(list) = i else {
@@ -491,9 +494,10 @@ impl Engine {
             Expr::Variable(var) => Ok(handle!(self.resolve(var), expr.span.clone())?),
             Expr::Copy(expr) =>
                 Ok(match self.eval(expr)? {
-                    // Only copy the mutable values. (Except type)
+                    // Only copy the mutable values.
                     Value::List(id) => Value::List(self.lists.copy(&id)),
                     Value::Map(id)  => Value::Map(self.maps.copy(&id)),
+                    Value::Type(id) => Value::Type(self.types.copy(&id)),
                     Value::Instance { type_id, id } 
                         => Value::Instance { type_id, id: self.instances.copy(&id)},
                     // No need to copy immutable values.

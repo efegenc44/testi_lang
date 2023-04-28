@@ -1,6 +1,13 @@
 // definition
 def Vector3
     x y z
+impl
+    fun to_string()
+        "Vector3: " 
+        + "x: " + self.x.to_string() + " "
+        + "y: " + self.y.to_string() + " "
+        + "z: " + self.z.to_string() + " "
+    end
 end
 
 let v = Vector3(1, 2, 3)
