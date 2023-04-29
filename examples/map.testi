@@ -1,3 +1,6 @@
+// everything implements step() method can be used with `map`
+// map from stdlib/prelude 
+
 print(
     [1, 3]
         .map(\x. x+3 end)

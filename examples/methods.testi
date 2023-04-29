@@ -16,6 +16,8 @@ impl
     end
 
     fun to_string()
+        // because there is no escaping in string literals 
+        // for newline we need to put literally newline 
         "Vector2
 "
         + "  x: " + self.x.to_string() + "

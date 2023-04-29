@@ -10,8 +10,7 @@ for i in [1, 2, 3, "WOW"] then
     print(i)
 end
 print("")
-print(
-    [1, 2, 3]
-        .map(\x. x+3 end)
-        .collect_to_list()
-)
+
+for v in #["a": 1, "b": 2].iter().enumerate() then
+    print(v)
+end

@@ -1,0 +1,19 @@
+for n in 99 then
+    let n = 99 - n
+    let s1 = "s"
+    let s2 = "s"
+    let n_minus_1 = (n - 1).to_string()
+
+    if n == 1 then
+        n_minus_1 = "No more"
+        s1 = ""
+    ef n == 2 then
+        s2 = ""
+    end
+
+    print(n.to_string() + " bottle" + s1 + " of beer on the wall.")
+    print(n.to_string() + " bottle" + s1 + " of beer.")
+    print("Take one down, pass it around. ")
+    print(n_minus_1 + " bottle" + s2 + " of beer on the wall.
+")
+end

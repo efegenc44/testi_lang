@@ -1,0 +1,9 @@
+// Order of definitions doesn't matter (except closures)
+
+let your_name = input()
+
+say_hi(your_name)
+
+fun say_hi(name)
+    print("Hi " + name)
+end

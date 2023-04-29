@@ -1,0 +1,8 @@
+// if the last statement is expression
+// it's returned implicitly
+
+fun ret()
+    3
+end
+
+print(ret()) // 3

@@ -2,6 +2,10 @@
 
 ## A dynamically typed toy programming language
 
+---
+
+### For Standart Library see [here](src/stdlib/)
+
 ### For examples see [here](examples)
 
 | Run              |
